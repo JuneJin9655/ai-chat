@@ -1,0 +1,52 @@
+services:
+  # app:
+  #   image: node:18
+  #   working_dir: /app
+  #   volumes:
+  #     - .:/app
+  #     - app_node_modules:/app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   environment:
+  #     - NODE_ENV=development
+  #     - DATABASE_URL=postgres://junjin:000000@postgres:5432/my_app
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #   command: npm run start:dev
+  #   networks:
+  #     - app-network
+  redis:
+    image: redis:alpine
+    container_name: my_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=junjin
+      - POSTGRES_PASSWORD=000000
+      - POSTGRES_DB=my_app
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
+    # app_node_modules:
+
+
