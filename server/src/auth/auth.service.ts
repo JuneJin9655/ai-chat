@@ -33,11 +33,12 @@ export class AuthService {
   ) { }
 
   async generateRefreshToken(user: User): Promise<RefreshToken> {
+    const refreshMaxAge = this.configService.get<number>('jwt.refresh.cookieMaxAge') || 60000;
     const refreshToken = await this.refreshTokenRepository.create({
       user,
       userId: user.id,
       token: uuidv4(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + refreshMaxAge),
     });
     return this.refreshTokenRepository.save(refreshToken);
   }
@@ -73,7 +74,8 @@ export class AuthService {
 
       const refreshToken = await this.generateRefreshToken(user);
       const payload = { username: user.username, sub: user.id, role: user.role };
-      const token = this.jwtService.sign(payload);
+      const accessExpiresIn = this.configService.get<string>('jwt.access.expiresIn');
+      const token = this.jwtService.sign(payload, { expiresIn: accessExpiresIn });
 
       await this.cacheManager.set(`auth_token_${user.id}`, token, 3600);
       await this.cacheManager.del(`login_failed_${username}`);
