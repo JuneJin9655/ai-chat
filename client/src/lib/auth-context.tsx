@@ -10,8 +10,10 @@ interface AuthContextType {
     loading: boolean;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string, email?: string) => Promise<void>;
-    logout: () => Promise<void>;
+    error: string | null;
+    logout: () => Promise<void>
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -40,12 +42,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(true);
         setError(null);
         try {
-            const response = await authApi.login({ username, password });
+            await authApi.login({ username, password });
             const userData = await authApi.getProfile();
             setUser(userData);
             router.push('/dashboard');
         } catch (err: any) {
-            const errorMsg = err.response?.data?.message || err.response?.data?.data?.message || 'Login Failed, Please try again';
+            const errorMsg = err.response?.data?.error?.message ||
+                err.response?.data?.message ||
+                'Login Failed, Please try again';
             setError(errorMsg);
             throw new Error(errorMsg);
         } finally {
@@ -82,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, register, logout, error }}>
             {children}
         </AuthContext.Provider>
     )

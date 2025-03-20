@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link'
 
+
 const loginSchema = z.object({
     username: z.string().min(3, 'Username must be at least 3 characters'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -14,8 +15,8 @@ const loginSchema = z.object({
 type LoginFormValue = z.infer<typeof loginSchema>;
 
 export default function LoginForm() {
-    const { login } = useAuth();
-    const [error, setError] = useState<string | null>(null);
+    const { login, error: authError } = useAuth();
+    const [localError, setLocalError] = useState<string | null>(null);
 
     const { register, handleSubmit, formState: { errors, isSubmitting }, } = useForm<LoginFormValue>({
         resolver: zodResolver(loginSchema),
@@ -23,23 +24,21 @@ export default function LoginForm() {
 
     const onSubmit = async (data: LoginFormValue) => {
         try {
-            setError(null);
+            setLocalError(null);
             await login(data.username, data.password);
         } catch (err: any) {
-            setError(
-                err.response?.data?.message ||
-                'Login failed. Please check your credentials.'
-            );
+            setLocalError(err.message);
         }
     };
 
+    const displayError = localError || authError;
     return (
         <div className="w-full max-w-md mx-auto">
             <form onSubmit={handleSubmit(onSubmit)} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
                 <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
-                {error && (
+                {displayError && (
                     <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-                        {error}
+                        {displayError}
                     </div>
                 )}
                 <div className="mb-4">
