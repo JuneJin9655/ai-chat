@@ -7,17 +7,15 @@ import Link from "next/link";
 
 const registerSchema = z.object({
     username: z.string()
-        .min(6, 'Username must be at least 6 characters')
-        .regex(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{3,}$/,
-            'Username must contain both letters and numbers'),
+        .min(6, "Username must be at least 6 characters")
+        .regex(/^(?=.*[A-Za-z])(?=.*\d).*$/, "Username must contain both letters and numbers"),
+    password: z.string()
+        .min(6, "Password must be at least 6 characters")
+        .regex(/^(?=.*[A-Za-z])(?=.*\d).*$/, "Password must contain both letters and numbers"),
     email: z.union([
         z.string().email('Invalid email format'),
         z.string().length(0)
     ]).optional(),
-    password: z.string()
-        .min(6, 'Password must be at least 6 characters')
-        .regex(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/,
-            'Password must contain both letters and numbers'),
     confirmPassword: z.string().min(6, 'Confirm password must be at least 6 characters'),
 }).refine((data) => data.password === data.confirmPassword, {
     message: "Password don't match",

@@ -18,7 +18,7 @@ export class AppService implements OnModuleInit {
         if (!adminExists) {
             const hashedPassword = await bcrypt.hash('admin0609', 10);
             const adminUser = this.userRepository.create({
-                username: 'Admin',
+                username: 'Admin69',
                 password: hashedPassword,
                 role: Role.ADMIN,
             });

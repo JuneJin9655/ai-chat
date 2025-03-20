@@ -1,7 +1,7 @@
 'user client'
 
 import { useAuth } from "@/lib/auth-context";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod"
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -9,8 +9,12 @@ import Link from 'next/link'
 
 
 const loginSchema = z.object({
-    username: z.string().min(3, 'Username must be at least 3 characters'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    username: z.string()
+        .min(6, "Username must be at least 6 characters")
+        .regex(/^(?=.*[A-Za-z])(?=.*\d).*$/, "Username must contain both letters and numbers"),
+    password: z.string()
+        .min(6, "Password must be at least 6 characters")
+        .regex(/^(?=.*[A-Za-z])(?=.*\d).*$/, "Password must contain both letters and numbers"),
 });
 type LoginFormValue = z.infer<typeof loginSchema>;
 
@@ -22,23 +26,34 @@ export default function LoginForm() {
         resolver: zodResolver(loginSchema),
     });
 
+    useEffect(() => {
+        if (authError) {
+            setLocalError(authError);
+        }
+    }, [authError]);
+
     const onSubmit = async (data: LoginFormValue) => {
         try {
             setLocalError(null);
             await login(data.username, data.password);
         } catch (err: any) {
-            setLocalError(err.message);
+            const errorMessage = err.response?.data?.details?.[0] ||
+                err.response?.data?.error?.message ||
+                err.response?.data?.message ||
+                err.response?.data?.errors?.username ||
+                err.response?.data?.errors?.password ||
+                "Login failed. Please try again.";
+            setLocalError(errorMessage)
         }
     };
 
-    const displayError = localError || authError;
     return (
         <div className="w-full max-w-md mx-auto">
             <form onSubmit={handleSubmit(onSubmit)} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
                 <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
-                {displayError && (
+                {localError && (
                     <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
-                        {displayError}
+                        {localError}
                     </div>
                 )}
                 <div className="mb-4">
@@ -71,7 +86,7 @@ export default function LoginForm() {
                 <div className="flex items-center justify-between">
                     <button
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || Object.keys(errors).length > 0}
                         className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full"
                     >
                         {isSubmitting ? 'Logging in...' : 'Login'}

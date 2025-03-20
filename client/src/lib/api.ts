@@ -104,7 +104,5 @@ export const authApi = {
 
     refreshToken: async (): Promise<void> => {
         const response = await api.post('/auth/refresh');
-        console.log('刷新响应:', response.data);
-        console.log('当前cookies:', document.cookie);
     }
 }
