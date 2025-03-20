@@ -40,9 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(true);
         setError(null);
         try {
-            await authApi.logout().catch(() => {
-
-            });
             const response = await authApi.login({ username, password });
             const userData = await authApi.getProfile();
             setUser(userData);

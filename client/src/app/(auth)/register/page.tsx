@@ -1,31 +1,17 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import RegisterForm from '@/components/auth/Register';
 
 export default function RegisterPage() {
-    const { user, loading } = useAuth();
-    const router = useRouter();
-
-    useEffect(() => {
-        // 如果用户已登录，自动重定向到仪表板
-        if (!loading && user) {
-            router.push('/dashboard');
-        }
-    }, [user, loading, router]);
+    const { loading } = useAuth();
 
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-screen">
-                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+                <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500">Loading...</div>
             </div>
         );
-    }
-
-    if (user) {
-        return null;
     }
 
     return (
