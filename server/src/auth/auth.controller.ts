@@ -78,7 +78,6 @@ export class AuthController {
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req: AuthenticatedRequest): Promise<UserDto> {
     const userId = parseInt(req.user.id);
     if (isNaN(userId)) {
@@ -121,14 +120,12 @@ export class AuthController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
   async remove(@Param('id') id: number) {
     await this.usersService.remove(id);
     return { message: 'User deleted successfully' };
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
   async logout(@Response({ passthrough: true }) response: ExpressResponse) {
     response.clearCookie('access_token');
     response.clearCookie('refresh_token');

@@ -1,5 +1,4 @@
 import { Controller, Get, Param, UseGuards, Patch, Body, Query, Delete } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from './dto/pagination.dto';
@@ -9,7 +8,7 @@ import { Role } from 'src/common/enums/roles.enum';
 import { IsSelfGuard } from 'src/auth/guards/is-self.guard';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGurad)
+@UseGuards(RolesGurad)
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
@@ -27,7 +26,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, IsSelfGuard)
+  @UseGuards(IsSelfGuard)
   update(
     @Param('id') id: number,
     @Body() updateUserDto: UpdateUserDto

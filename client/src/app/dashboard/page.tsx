@@ -1,5 +1,6 @@
 'use client'
 
+import ChatBox from "@/components/chat/ChatBox";
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation";
 import { useEffect } from "react"
@@ -60,6 +61,12 @@ export default function DashboardPage() {
                             <span>{new Date(user.createdAt).toLocaleString()}</span>
                         </div>
                     </div>
+                </div>
+
+
+                <div className="bg-white shadow-md rounded-lg p-6">
+                    <h2 className="text-xl font-bold mb-4">Chat with AI</h2>
+                    <ChatBox />
                 </div>
             </div>
         </div>

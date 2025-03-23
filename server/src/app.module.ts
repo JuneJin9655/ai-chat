@@ -10,11 +10,11 @@ import configuration from './config/configuration';
 import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { RolesGurad } from './common/gurads/roles.gurad';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
-import { hostname } from 'os';
+import { ChatController } from './chat/chat.controller';
+import { ChatModule } from './chat/chat.module';
 
 
 @Module({
@@ -49,18 +49,16 @@ import { hostname } from 'os';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: process.env.NODE_ENV !== 'production',
     }),
     TypeOrmModule.forFeature([User]),
     AuthModule,
     UsersModule,
+    ChatModule,
   ],
   providers: [
-    UsersService,
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGurad },
   ],
-  controllers: [UsersController],
 })
 export class AppModule { }

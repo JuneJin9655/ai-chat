@@ -1,6 +1,7 @@
 'use client'
 
 import { AUthResponse, LoginCredentials, RegisterCredentials, User } from "@/types/auth";
+import { ChatMessage } from "@/types/chat";
 import axios from "axios"
 
 declare module 'axios' {
@@ -104,5 +105,12 @@ export const authApi = {
 
     refreshToken: async (): Promise<void> => {
         const response = await api.post('/auth/refresh');
+    }
+}
+
+export const chatApi = {
+    sendMessage: async (message: string): Promise<{ data: { message: string; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number; } } }> => {
+        const response = await api.post('/chat', { message });
+        return response.data;
     }
 }
