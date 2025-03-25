@@ -1,116 +1,57 @@
 'use client'
 
 import { AUthResponse, LoginCredentials, RegisterCredentials, User } from "@/types/auth";
-import { ChatMessage } from "@/types/chat";
-import axios from "axios"
+import axios from "axios";
 
-declare module 'axios' {
-    interface AxiosRequestConfig {
-        _retry?: boolean;
-    }
-}
+// API基础URL，从环境变量获取或使用默认值
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-
+// 创建axios实例
 export const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    withCredentials: true,
+    withCredentials: true, // 启用跨域请求时发送cookie
 });
 
-let isRefreshing = false;
-let failedQueue: { resolve: (value?: unknown) => void; reject: (reason?: any) => void }[] = [];
-
-const processQueue = (error: any, token = null) => {
-    failedQueue.forEach(prom => {
-        if (error) {
-            prom.reject(error);
-        } else {
-            prom.resolve(token);
-        }
-    });
-    failedQueue = [];
-}
-
-api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-        const originalRequest = error.config;
-
-        if (!originalRequest || !originalRequest.url) {
-            return Promise.reject(error);
-        }
-
-        if (error.response && error.response.status === 401 && !originalRequest._retry &&
-            originalRequest.url !== '/auth/refresh' && originalRequest.url !== '/auth/login') {
-            console.log('Token过期,尝试刷新...');
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                })
-                    .then(() => {
-                        return api(originalRequest);
-                    })
-                    .catch(err => {
-                        return Promise.reject(err);
-                    });
-
-            }
-            originalRequest._retry = true;
-            isRefreshing = true;
-            try {
-                await authApi.refreshToken();
-                processQueue(null);
-                isRefreshing = false;
-
-                return api(originalRequest);
-            } catch (refreshError) {
-                processQueue(refreshError);
-                isRefreshing = false;
-
-                if (typeof window !== 'undefined') {
-                    if (!window.location.pathname.includes('/login')) {
-                        sessionStorage.setItem('auth_redirect', 'true');
-                        window.location.href = '/login?redirected=true';
-                    }
-                }
-                return Promise.reject(refreshError);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
-
+// 认证相关API方法
 export const authApi = {
-    login: async (Credential: LoginCredentials): Promise<AUthResponse> => {
-        const response = await api.post('/auth/login', Credential);
+    // 登录方法
+    login: async (credentials: LoginCredentials): Promise<AUthResponse> => {
+        const response = await api.post('/auth/login', credentials);
         return response.data.data;
     },
 
-    register: async (Credential: RegisterCredentials): Promise<User> => {
-        const response = await api.post('/auth/register', Credential);
+    // 注册方法
+    register: async (credentials: RegisterCredentials): Promise<User> => {
+        const response = await api.post('/auth/register', credentials);
         return response.data.data;
     },
 
+    // 获取用户配置文件
     getProfile: async (): Promise<User> => {
         const response = await api.get('/auth/profile');
         return response.data.data;
     },
 
+    // 退出登录
     logout: async (): Promise<void> => {
         await api.post('/auth/logout');
     },
 
-    refreshToken: async (): Promise<void> => {
+    // 刷新token
+    refreshToken: async (): Promise<AUthResponse> => {
         const response = await api.post('/auth/refresh');
+        return response.data.data;
     }
-}
+};
 
+// 聊天相关API方法
 export const chatApi = {
-    sendMessage: async (message: string): Promise<{ data: { message: string; usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number; } } }> => {
+    // 发送消息
+    sendMessage: async (message: string): Promise<any> => {
         const response = await api.post('/chat', { message });
         return response.data;
     }
-}
+};

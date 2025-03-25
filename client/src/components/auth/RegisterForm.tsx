@@ -1,62 +1,70 @@
 'use client'
 
 import { useAuth } from '@/lib/auth-context';
-import { useState } from 'react';
-import { z } from 'zod';
+import { useState, useEffect } from 'react';
+import { z } from 'zod'
 
-const loginSchema = z.object({
+const registerSchema = z.object({
     username: z.string()
         .min(6, 'Username must be at least 6 characters')
-        .regex(/^[a-zA-Z0-9_]+$/, 'Username must contain only letters, numbers, and underscores'),
+        .regex(/^(?=.*[0-9])(?=.*[a-zA-Z])[a-zA-Z0-9_]+$/, 'Username must contain at least one letter and one number'),
     password: z.string()
         .min(6, 'Password must be at least 6 characters')
-        .regex(/^[a-zA-Z0-9_]+$/, 'Password must contain only letters, numbers, and underscores'),
-});
+        .regex(/^(?=.*[0-9])(?=.*[a-zA-Z])[a-zA-Z0-9_]+$/, 'Password must contain at least one letter and one number'),
+    email: z.union([
+        z.string().email('Invalid email format'),
+        z.string().max(0)  // 允许空字符串
+    ]).optional()
+})
 
-type LoginFormData = z.infer<typeof loginSchema>;
+type RegisterFormData = z.infer<typeof registerSchema>;
 
-export default function LoginForm() {
-    const { login, loading, error, setShowLoginForm, setShowRegisterForm } = useAuth();
+export default function RegisterForm() {
+    const { register, loading, error, setShowLoginForm, setShowRegisterForm } = useAuth();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('');
     const [validationError, setValidationError] = useState('');
+    const [isValid, setIsValid] = useState(false);
 
-    const switchToRegister = () => {
-        setShowLoginForm(false);
-        setShowRegisterForm(true);
-    }
-
-    const validateForm = (): boolean => {
-        try {
-            loginSchema.parse({ username, password });
-            setValidationError('');
-            return true;
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                setValidationError(error.errors[0].message);
+    // 实时验证表单
+    useEffect(() => {
+        const validateForm = () => {
+            try {
+                registerSchema.parse({ username, password, email });
+                setValidationError('');
+                setIsValid(true);
+            } catch (error) {
+                if (error instanceof z.ZodError) {
+                    setValidationError(error.errors[0].message);
+                    setIsValid(false);
+                }
             }
-            return false;
-        }
-    };
+        };
+
+        validateForm();
+    }, [username, password, email]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setValidationError('');  // 重置验证错误
+
+        if (!isValid) {
+            return;
+        }
 
         try {
-            // 使用 Zod 验证表单
-            loginSchema.parse({ username, password });
-            // 验证通过，调用登录
-            await login(username, password);
+            // 如果 email 是空字符串，则传递 undefined
+            const emailToSend = email.trim() === '' ? undefined : email;
+            await register(username, password, emailToSend);
         } catch (error) {
-            // 如果是验证错误，显示验证错误信息
-            if (error instanceof z.ZodError) {
-                setValidationError(error.errors[0].message);
-                return;  // 验证失败，直接返回
-            }
-            // 其他错误继续抛出
-            throw error;
+            // 处理其他错误（比如网络错误）
+            console.error('Registration error:', error);
         }
+    };
+
+    const switchToLogin = () => {
+        setShowLoginForm(true);
+        setShowRegisterForm(false);
     };
 
     return (
@@ -92,24 +100,35 @@ export default function LoginForm() {
                     />
                 </div>
 
+                <div className="mb-6">
+                    <label className="block text-white mb-2 font-orbitron font-bold text-xl">Email</label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full p-2 bg-transparent text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500 [&:-webkit-autofill]:bg-transparent [&:-webkit-autofill]:text-white [&:-webkit-autofill_selected]:bg-transparent"
+                        disabled={loading}
+                    />
+                </div>
+
                 <button
                     type="submit"
                     className="font-orbitron font-bold text-xl w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 hover:bg-white/10 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-transparent"
-                    disabled={loading}
+                    disabled={loading || !isValid}
                 >
-                    {loading ? 'Login...' : 'Login'}
+                    {loading ? 'Registering...' : 'Register'}
                 </button>
 
                 <div className="mt-4 text-center">
                     <button
                         type="button"
-                        onClick={switchToRegister}
+                        onClick={switchToLogin}
                         className="text-blue-400 hover:text-blue-300 font-orbitron text-sm"
                     >
-                        Don't have an account? Register
+                        Already have an account? Login
                     </button>
                 </div>
             </form>
         </div>
     );
-} 
+}

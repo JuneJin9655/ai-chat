@@ -19,6 +19,17 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     const [currentChar, setCurrentChar] = useState(0);
     const [isTyping, setIsTyping] = useState(true);
     const mountedRef = useRef(true);
+    const textsRef = useRef<string[]>(texts);
+
+    useEffect(() => {
+        if (JSON.stringify(textsRef.current) !== JSON.stringify(texts)) {
+            textsRef.current = texts;
+            setDisplayedLines([]);
+            setCurrentLine(0);
+            setCurrentChar(0);
+            setIsTyping(true);
+        }
+    }, [texts]);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -68,15 +79,22 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     }, [currentLine, currentChar, isTyping, texts, typingSpeed, delayBetweenLines]);
 
     return (
-        <div className={`text-left ${className}`}>
+        <div className={`w-full ${className}`}>
             {displayedLines.map((line, index) => (
-                <p key={index} className="mt-4 font-orbitron text-xl">
-                    {line}
-                    {/* 只在当前正在输入的行末尾显示光标 */}
-                    {index === currentLine && isTyping && (
-                        <span className="ml-1 animate-pulse">|</span>
-                    )}
-                </p>
+                <div
+                    key={index}
+                    className={`mt-4 w-full relative ${index === 0 ? 'h-10' : 'h-7'}`}
+                >
+                    <p className={`whitespace-pre-wrap break-words absolute left-0 font-orbitron ${index === 0
+                        ? 'text-3xl font-bold'
+                        : 'text-xl'
+                        }`}>
+                        {line}
+                        {index === currentLine && isTyping && (
+                            <span className="inline-block ml-1 animate-pulse">|</span>
+                        )}
+                    </p>
+                </div>
             ))}
         </div>
     );
