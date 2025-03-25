@@ -104,11 +104,11 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             {displayedLines.map((line, index) => (
                 <div
                     key={index}
-                    className={`mt-4 w-full relative ${index === 0 ? 'h-10' : 'h-7'}`}
+                    className={`mb-6 sm:mb-8 w-full relative ${index === 0 ? 'min-h-[3rem]' : 'min-h-[2.5rem]'}`}
                 >
-                    <p className={`whitespace-pre-wrap break-words absolute left-0 ${index === 0
-                        ? 'text-3xl font-bold'
-                        : 'text-xl'
+                    <p className={`whitespace-pre-wrap break-words ${index === 0
+                        ? 'text-2xl sm:text-3xl font-bold'
+                        : 'text-lg sm:text-xl'
                         }`}>
                         {line}
                         {index === currentLine && isTyping && !skipAnimation && (

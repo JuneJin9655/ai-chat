@@ -35,15 +35,15 @@ export default function ClientHomePage() {
     return (
         <>
             <Navbar onLoginClick={toggleLoginFormOnly} />
-            <div className="flex h-[calc(100vh-80px)]">
+            <div className="flex min-h-[calc(100vh-80px)] flex-col md:flex-row">
                 <Sidebar />
-                <div className="flex-1 flex justify-center mt-24 pr-34 relative">
+                <div className="flex-1 flex justify-center mt-6 md:mt-24 pr-4 md:pr-34 relative">
                     {showLoginForm ? (
                         <LoginForm />
                     ) : showRegisterForm ? (
                         <RegisterForm />
                     ) : (
-                        <div className="w-full max-w-3xl px-4">
+                        <div className="w-full max-w-3xl px-4 pb-20">
                             <HomeIntro />
                         </div>
                     )}

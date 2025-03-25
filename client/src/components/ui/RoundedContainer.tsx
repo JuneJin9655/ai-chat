@@ -13,7 +13,7 @@ const RoundedContainer = ({
     showTime = true
 }: RoundedContainerProps) => {
     return (
-        <div className="min-h-screen flex items-center justify-center m-3">
+        <div className="min-h-screen flex items-start justify-center m-3 py-4 overflow-auto">
             <div
                 className="
           rounded-[2rem] 
@@ -26,6 +26,8 @@ const RoundedContainer = ({
           bg-white/5 backdrop-blur-sm
           p-6
           pt-10
+          my-4
+          min-h-[calc(100vh-2rem)]
         "
                 style={{
                     backdropFilter: 'blur(8px)',
