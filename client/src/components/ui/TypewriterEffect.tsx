@@ -18,8 +18,17 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     const [currentLine, setCurrentLine] = useState(0);
     const [currentChar, setCurrentChar] = useState(0);
     const [isTyping, setIsTyping] = useState(true);
+    const [skipAnimation, setSkipAnimation] = useState(false);
     const mountedRef = useRef(true);
     const textsRef = useRef<string[]>(texts);
+
+    // 处理跳过动画
+    const handleSkipAnimation = () => {
+        setSkipAnimation(true);
+        setDisplayedLines([...texts]);
+        setCurrentLine(texts.length);
+        setIsTyping(false);
+    };
 
     useEffect(() => {
         if (JSON.stringify(textsRef.current) !== JSON.stringify(texts)) {
@@ -28,6 +37,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             setCurrentLine(0);
             setCurrentChar(0);
             setIsTyping(true);
+            setSkipAnimation(false);
         }
     }, [texts]);
 
@@ -40,7 +50,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     }, []);
 
     useEffect(() => {
-        if (currentLine >= texts.length) {
+        if (skipAnimation || currentLine >= texts.length) {
             return;
         }
 
@@ -76,10 +86,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         return () => {
             if (timer) clearTimeout(timer);
         };
-    }, [currentLine, currentChar, isTyping, texts, typingSpeed, delayBetweenLines]);
+    }, [currentLine, currentChar, isTyping, texts, typingSpeed, delayBetweenLines, skipAnimation]);
 
     return (
         <div className={`w-full ${className}`}>
+            <div className="flex justify-between items-center mb-6">
+                {!skipAnimation && currentLine < texts.length && (
+                    <button
+                        onClick={handleSkipAnimation}
+                        className="text-sm font-bold font-orbitron text-white/80 px-3 py-1 rounded bg-transparent hover:bg-white/20 transition border border-white"
+                    >
+                        Skip Animation
+                    </button>
+                )}
+                <div></div> {/* 空div用于保持两边对齐 */}
+            </div>
             {displayedLines.map((line, index) => (
                 <div
                     key={index}
@@ -90,7 +111,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                         : 'text-xl'
                         }`}>
                         {line}
-                        {index === currentLine && isTyping && (
+                        {index === currentLine && isTyping && !skipAnimation && (
                             <span className="inline-block ml-1 animate-pulse">|</span>
                         )}
                     </p>

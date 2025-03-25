@@ -1,13 +1,5 @@
-import Sidebar from '@/components/UI/Sidebar';
-import { ReactNode } from 'react';
-
-export default function ProjectLayout({ children }: { children: ReactNode }) {
+export default function ProjectLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex h-[calc(100vh-80px)]">
-            <Sidebar />
-            <div className="flex-1 p-4 overflow-auto">
-                {children}
-            </div>
-        </div>
+        <>{children}</>
     );
 }
