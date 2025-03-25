@@ -1,9 +1,8 @@
 // components/ui/Sidebar.tsx
 'use client'
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { resolve } from 'path';
 
 interface SidebarItem {
     name: string;
@@ -13,7 +12,7 @@ interface SidebarItem {
 }
 
 const sidebarItems: SidebarItem[] = [
-    { name: 'Home', href: '/home' },
+    { name: 'Home', href: '/' },
     {
         name: 'Project',
         href: '/projects',
@@ -31,6 +30,13 @@ const sidebarItems: SidebarItem[] = [
     { name: 'About Me', href: '/about' },
     { name: 'Contact Me', href: '/contact' }
 ];
+
+// 辅助函数: 检查菜单项是否激活
+const isItemActive = (itemPath: string, currentPath: string, isParent = false) => {
+    return isParent
+        ? currentPath === itemPath || currentPath.startsWith(itemPath + '/')
+        : currentPath === itemPath;
+};
 
 const Sidebar: React.FC = () => {
     const pathname = usePathname();
@@ -76,6 +82,25 @@ const Sidebar: React.FC = () => {
         }));
     };
 
+    // 渲染菜单项内容的函数
+    const renderMenuItemContent = (item: SidebarItem, active: boolean, isChild = false) => {
+        const baseClasses = `
+            flex items-center ${isChild ? 'py-1 px-3' : 'px-2 py-2'} rounded-${isChild ? 'md' : 'lg'} 
+            transition-all duration-${isChild ? '200' : '300'} cursor-pointer
+            ${active
+                ? `bg-white${isChild ? '/70' : ''} text-black`
+                : `text-white${isChild ? '/80' : ''} hover:bg-white/10`
+            }
+            font-orbitron ${isChild ? 'text-sm' : 'text-lg'}
+        `;
+
+        return (
+            <div className={baseClasses}>
+                <span className='ml-2'>{item.name}</span>
+            </div>
+        );
+    };
+
     return (
         <div className='relative h-full bg-transparent mt-24 flex flex-col'>
             <button
@@ -90,7 +115,7 @@ const Sidebar: React.FC = () => {
             <div className='py-16'>
                 <ul className='space-y-4'>
                     {sidebarItems.map((item, index) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                        const isActive = isItemActive(item.href, pathname, true);
                         const isExpanded = !!expandedItems[item.name];
                         const hasChildren = !!item.children?.length;
 
@@ -104,16 +129,23 @@ const Sidebar: React.FC = () => {
                                 `}
                                 style={{ transitionDelay: `${activeItems[index] ? index * 80 : (sidebarItems.length - index - 1) * 80}ms` }}
                             >
-                                <div className={`
-                                    flex items-center justify-between px-2 py-2 rounded-lg transition-all duration-300 cursor-pointer
-                                    ${isActive ? 'bg-white text-black' : 'text-white hover:bg-white/10'}
-                                    font-orbitron text-lg
-                                `}
+                                <div
+                                    className={`
+                                        flex items-center justify-between px-2 py-2 rounded-lg transition-all duration-300 cursor-pointer
+                                        ${isActive ? 'bg-white text-black' : 'text-white hover:bg-white/10'}
+                                        font-orbitron text-lg
+                                    `}
                                     onClick={() => hasChildren ? toggleExpand(item.name) : null}
                                 >
-                                    <div className='flex items-center'>
-                                        <span className='ml-2'>{item.name}</span>
-                                    </div>
+                                    {hasChildren ? (
+                                        <div className="w-full flex items-center">
+                                            <span className='ml-2'>{item.name}</span>
+                                        </div>
+                                    ) : (
+                                        <Link href={item.href} className="w-full flex items-center">
+                                            <span className='ml-2'>{item.name}</span>
+                                        </Link>
+                                    )}
                                 </div>
 
                                 {hasChildren && (
@@ -122,7 +154,7 @@ const Sidebar: React.FC = () => {
                                         ${isExpanded ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}
                                     `}>
                                         {item.children?.map((child) => {
-                                            const isChildActive = pathname === child.href;
+                                            const isChildActive = isItemActive(child.href, pathname);
 
                                             return (
                                                 <li key={child.name} className='my-1'>
