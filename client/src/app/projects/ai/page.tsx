@@ -1,10 +1,9 @@
-// ai-chat/client/src/app/projects/ai/page.tsx
 'use client'
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import ChatBox from '@/components/chat/ChatBox';
+import ChatBox from '@/components/Chat/ChatBox';
 
 export default function AIChatPage() {
     const { user, loading } = useAuth();

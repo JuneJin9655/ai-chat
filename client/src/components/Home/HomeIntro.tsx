@@ -1,6 +1,6 @@
 'use client'
 import React from 'react';
-import TypewriterEffect from '@/components/ui/TypewriterEffect';
+import TypewriterEffect from '@/components/UI/TypewriterEffect';
 import { useAuth } from '@/lib/auth-context';
 
 interface HomeIntroProps {

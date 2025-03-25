@@ -1,8 +1,9 @@
 // components/ui/Sidebar.tsx
 'use client'
 import React, { useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/lib/auth-context';
 
 interface SidebarItem {
     name: string;
@@ -39,6 +40,8 @@ const isItemActive = (itemPath: string, currentPath: string, isParent = false) =
 };
 
 const Sidebar: React.FC = () => {
+    const { user, setShowLoginForm } = useAuth();
+    const router = useRouter();
     const pathname = usePathname();
     const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
     const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -80,6 +83,19 @@ const Sidebar: React.FC = () => {
             ...prev,
             [name]: !prev[name]
         }));
+    };
+
+    // 处理需要认证的链接点击
+    const handleProtectedLink = (e: React.MouseEvent, href: string) => {
+        // 如果用户未登录，阻止默认导航
+        if (!user) {
+            e.preventDefault();
+            // 显示登录表单
+            setShowLoginForm(true);
+            // 保存想要访问的路径
+            localStorage.setItem('loginRedirect', href);
+        }
+        // 如果用户已登录，允许默认导航行为
     };
 
     // 渲染菜单项内容的函数
@@ -155,10 +171,15 @@ const Sidebar: React.FC = () => {
                                     `}>
                                         {item.children?.map((child) => {
                                             const isChildActive = isItemActive(child.href, pathname);
+                                            // 判断此链接是否需要认证
+                                            const requiresAuth = child.href.startsWith('/projects/ai');
 
                                             return (
                                                 <li key={child.name} className='my-1'>
-                                                    <Link href={child.href}>
+                                                    <Link
+                                                        href={child.href}
+                                                        onClick={(e) => requiresAuth ? handleProtectedLink(e, child.href) : null}
+                                                    >
                                                         <div className={`
                                                             flex items-center py-1 px-3 rounded-md transition-all duration-200
                                                             ${isChildActive ? 'bg-white/70 text-black' : 'text-white/80 hover:bg-white/10'}

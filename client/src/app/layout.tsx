@@ -1,8 +1,8 @@
 import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
 import type { Metadata } from 'next';
-import ParticlesBackground from '@/components/backGround/ParticlesBackground';
-import CustomCursor from '@/components/ui/CustomCursor';
+import ParticlesBackground from '@/components/BackGround/ParticlesBackground';
+import CustomCursor from '@/components/UI/CustomCursor';
 
 export const metadata: Metadata = {
   title: 'My SaaS Application',

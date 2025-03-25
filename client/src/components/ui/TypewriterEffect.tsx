@@ -85,7 +85,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                     key={index}
                     className={`mt-4 w-full relative ${index === 0 ? 'h-10' : 'h-7'}`}
                 >
-                    <p className={`whitespace-pre-wrap break-words absolute left-0 font-orbitron ${index === 0
+                    <p className={`whitespace-pre-wrap break-words absolute left-0 ${index === 0
                         ? 'text-3xl font-bold'
                         : 'text-xl'
                         }`}>

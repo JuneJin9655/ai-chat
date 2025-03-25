@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/auth-context';
 import { useState } from 'react';
 import { z } from 'zod';
+import { useRouter } from 'next/navigation';
 
 const loginSchema = z.object({
     username: z.string()
@@ -20,6 +21,7 @@ export default function LoginForm() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [validationError, setValidationError] = useState('');
+    const router = useRouter();
 
     const switchToRegister = () => {
         setShowLoginForm(false);
@@ -48,6 +50,13 @@ export default function LoginForm() {
             loginSchema.parse({ username, password });
             // 验证通过，调用登录
             await login(username, password);
+
+            // 检查是否有保存的重定向路径
+            const redirectPath = localStorage.getItem('loginRedirect');
+            if (redirectPath) {
+                localStorage.removeItem('loginRedirect'); // 清除已使用的路径
+                router.push(redirectPath); // 重定向到之前尝试访问的页面
+            }
         } catch (error) {
             // 如果是验证错误，显示验证错误信息
             if (error instanceof z.ZodError) {
