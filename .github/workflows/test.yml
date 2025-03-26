@@ -20,21 +20,17 @@ jobs:
         cache: 'npm'
         
     - name: Install frontend dependencies
-      run: |
-        cd client
-        npm ci
+      working-directory: ./client
+      run: npm ci
         
     - name: Install backend dependencies
-      run: |
-        cd server
-        npm ci
+      working-directory: ./server
+      run: npm ci
         
     - name: Run frontend tests
-      run: |
-        cd client
-        npm test
+      working-directory: ./client
+      run: npm test
         
     - name: Run backend tests
-      run: |
-        cd server
-        npm test
+      working-directory: ./server
+      run: npm test
