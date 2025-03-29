@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
                 const userData = await authApi.getProfile();
                 setUser(userData);
-            } catch (err) {
+            } catch {
                 // 如果请求失败，用户未登录
                 setUser(null);
             } finally {
@@ -73,9 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const userData = await authApi.getProfile();
             setUser(userData);
             setShowLoginForm(false); // 登录成功后隐藏表单
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Login error:', err);
-            setError(err.response?.data?.error?.message || 'Login failed, please try again');
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : (err as { response?: { data?: { error?: { message: string } } } })?.response?.data?.error?.message || 'Login failed, please try again'
+            );
         } finally {
             setLoading(false);
         }
@@ -107,9 +111,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // 注册成功后切换到登录表单
             setShowRegisterForm(false);
             setShowLoginForm(true);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Register error:', err);
-            setError(err.response?.data?.error?.message || 'Registration failed, please try again');
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : (err as { response?: { data?: { error?: { message: string } } } })?.response?.data?.error?.message || 'Registration failed, please try again'
+            );
         } finally {
             setLoading(false);
         }

@@ -1,7 +1,7 @@
 // components/ui/Sidebar.tsx
 'use client'
 import React, { useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 
@@ -41,7 +41,6 @@ const isItemActive = (itemPath: string, currentPath: string, isParent = false) =
 
 const Sidebar: React.FC = () => {
     const { user, setShowLoginForm } = useAuth();
-    const router = useRouter();
     const pathname = usePathname();
     const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
     const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -96,25 +95,6 @@ const Sidebar: React.FC = () => {
             localStorage.setItem('loginRedirect', href);
         }
         // 如果用户已登录，允许默认导航行为
-    };
-
-    // 渲染菜单项内容的函数
-    const renderMenuItemContent = (item: SidebarItem, active: boolean, isChild = false) => {
-        const baseClasses = `
-            flex items-center ${isChild ? 'py-1 px-3' : 'px-2 py-2'} rounded-${isChild ? 'md' : 'lg'} 
-            transition-all duration-${isChild ? '200' : '300'} cursor-pointer
-            ${active
-                ? `bg-white${isChild ? '/70' : ''} text-black`
-                : `text-white${isChild ? '/80' : ''} hover:bg-white/10`
-            }
-            font-orbitron ${isChild ? 'text-sm' : 'text-lg'}
-        `;
-
-        return (
-            <div className={baseClasses}>
-                <span className='ml-2'>{item.name}</span>
-            </div>
-        );
     };
 
     return (

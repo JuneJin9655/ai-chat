@@ -3,6 +3,7 @@ import React from "react";
 import { useCallback, useState, useEffect } from "react";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
+import { Engine } from "tsparticles-engine";
 
 interface ParticlesBackgroundProps {
     children?: React.ReactNode;
@@ -15,7 +16,7 @@ const ParticlesBackground: React.FC<ParticlesBackgroundProps> = ({ children }) =
         setIsMounted(true);
     }, []);
 
-    const particlesInit = useCallback(async (engine: any) => {
+    const particlesInit = useCallback(async (engine: Engine) => {
         await loadSlim(engine);
     }, []);
 

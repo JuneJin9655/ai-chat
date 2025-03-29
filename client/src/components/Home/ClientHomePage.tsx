@@ -1,11 +1,11 @@
 'use client'
 
 import { useAuth } from '@/lib/auth-context';
-import Navbar from '@/components/UI/Navbar';
-import Sidebar from '@/components/UI/Sidebar';
+import Navbar from '@/components/ui/Navbar';
+import Sidebar from '@/components/ui/Sidebar';
 import HomeIntro from '@/components/Home/HomeIntro';
-import LoginForm from '@/components/Auth/LoginForm';
-import RegisterForm from '@/components/Auth/RegisterForm';
+import LoginForm from '@/components/auth/LoginForm';
+import RegisterForm from '@/components/auth/RegisterForm';
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 

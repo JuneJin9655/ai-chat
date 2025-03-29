@@ -3,6 +3,11 @@
 import { AUthResponse, LoginCredentials, RegisterCredentials, User } from "@/types/auth";
 import axios from "axios";
 
+interface FailedQueueItem {
+    resolve: (token: string | null) => void;
+    reject: (error: unknown) => void;
+}
+
 // API基础URL，从环境变量获取或使用默认值
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
@@ -16,9 +21,9 @@ export const api = axios.create({
 });
 
 let isRefreshing = false;
-let failedQueue: any[] = [];
+let failedQueue: FailedQueueItem[] = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
     failedQueue.forEach(prom => {
         if (error) {
             prom.reject(error);
@@ -47,7 +52,7 @@ api.interceptors.response.use(
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
                 })
-                    .then(token => {
+                    .then(() => {
                         return api(originalRequest);
                     })
                     .catch(err => {
@@ -119,7 +124,7 @@ export const authApi = {
 // 聊天相关API方法
 export const chatApi = {
     // 发送消息
-    sendMessage: async (message: string): Promise<any> => {
+    sendMessage: async (message: string): Promise<{ message: string; timestamp: string }> => {
         const response = await api.post('/chat', { message });
         return response.data;
     }
