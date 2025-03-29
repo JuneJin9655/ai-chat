@@ -21,11 +21,13 @@ import { UsersModule } from 'src/users/users.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('jwt.secret'),
-        signOptions: { expiresIn: configService.get<string>('jwt.access.expiresIn') },
+        signOptions: {
+          expiresIn: configService.get<string>('jwt.access.expiresIn'),
+        },
       }),
     }),
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
 })
-export class AuthModule { }
+export class AuthModule {}

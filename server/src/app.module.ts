@@ -3,8 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './users/entities/user.entity';
 import { AuthModule } from './auth/auth.module';
-import { UsersService } from './users/users.service';
-import { UsersController } from './users/users.controller';
 import { UsersModule } from './users/users.module';
 import configuration from './config/configuration';
 import { AppService } from './app.service';
@@ -13,9 +11,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
-import { ChatController } from './chat/chat.controller';
 import { ChatModule } from './chat/chat.module';
-
 
 @Module({
   imports: [
@@ -56,9 +52,6 @@ import { ChatModule } from './chat/chat.module';
     UsersModule,
     ChatModule,
   ],
-  providers: [
-    AppService,
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
-  ],
+  providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
-export class AppModule { }
+export class AppModule {}

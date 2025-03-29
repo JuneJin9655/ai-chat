@@ -1,4 +1,13 @@
-import { Controller, Get, Param, UseGuards, Patch, Body, Query, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  UseGuards,
+  Patch,
+  Body,
+  Query,
+  Delete,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto } from './dto/pagination.dto';
@@ -10,7 +19,7 @@ import { IsSelfGuard } from 'src/auth/guards/is-self.guard';
 @Controller('users')
 @UseGuards(RolesGurad)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get()
   @Roles(Role.ADMIN)
@@ -27,10 +36,7 @@ export class UsersController {
 
   @Patch(':id')
   @UseGuards(IsSelfGuard)
-  update(
-    @Param('id') id: number,
-    @Body() updateUserDto: UpdateUserDto
-  ) {
+  update(@Param('id') id: number, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 

@@ -9,23 +9,23 @@ import {
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column({ unique: true })
-  username: string;
+  username!: string;
 
   @Column()
-  password: string;
+  password!: string;
 
   @Column({ unique: true, nullable: true })
-  email: string;
+  email?: string;
 
   @Column({ type: 'enum', enum: Role, default: Role.USER })
-  role: string;
+  role!: string;
 
-  @Column({ nullable: true, })
-  avatar: string;
+  @Column({ nullable: true })
+  avatar?: string;
 
   @CreateDateColumn()
-  createdAt: Date
+  createdAt!: Date;
 }

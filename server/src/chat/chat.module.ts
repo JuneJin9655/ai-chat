@@ -4,6 +4,6 @@ import { ChatController } from './chat.controller';
 
 @Module({
   controllers: [ChatController],
-  providers: [ChatService]
+  providers: [ChatService],
 })
-export class ChatModule { }
+export class ChatModule {}

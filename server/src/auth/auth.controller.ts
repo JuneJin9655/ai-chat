@@ -11,7 +11,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { UsersService } from '../users/users.service';
@@ -24,6 +23,7 @@ import { ConfigService } from '@nestjs/config';
 
 export interface AuthenticatedRequest extends Request {
   user: { id: string; username: string };
+  cookies: { refresh_token?: string };
 }
 
 @Controller('auth')
@@ -31,18 +31,20 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
-    private readonly configService: ConfigService
-  ) { }
+    private readonly configService: ConfigService,
+  ) {}
 
   @UseGuards(CustomThrottlerGuard)
   @Public()
   @Post('register')
-  async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
+  async register(
+    @Body() registerDto: RegisterDto,
+  ): Promise<RegisterResponseDto> {
     const user = await this.authService.register(registerDto);
     return {
       ...user,
       role: user.role as Role,
-      updatedAt: user.createdAt
+      updatedAt: user.createdAt,
     };
   }
 
@@ -51,12 +53,19 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
-    @Response({ passthrough: true }) response: ExpressResponse
+    @Response({ passthrough: true }) response: ExpressResponse,
   ): Promise<LoginResponseDto> {
-    const result = await this.authService.login(loginDto.username, loginDto.password)
+    const result = await this.authService.login(
+      loginDto.username,
+      loginDto.password,
+    );
 
-    const accessMaxAge = this.configService.get<number>('jwt.access.cookieMaxAge');
-    const refreshMaxAge = this.configService.get<number>('jwt.refresh.cookieMaxAge');
+    const accessMaxAge = this.configService.get<number>(
+      'jwt.access.cookieMaxAge',
+    );
+    const refreshMaxAge = this.configService.get<number>(
+      'jwt.refresh.cookieMaxAge',
+    );
 
     response.cookie('access_token', result.access_token, {
       httpOnly: true,
@@ -72,7 +81,7 @@ export class AuthController {
       sameSite: 'lax',
       maxAge: refreshMaxAge,
       path: '/auth/refresh',
-    })
+    });
 
     return result;
   }
@@ -88,7 +97,7 @@ export class AuthController {
     return {
       ...user,
       role: user.role as Role,
-      updatedAt: user.createdAt
+      updatedAt: user.createdAt,
     };
   }
 
@@ -96,8 +105,8 @@ export class AuthController {
   @Public()
   async refresh(
     @Body('refresh_token') bodyToken: string,
-    @Request() req,
-    @Response({ passthrough: true }) response: ExpressResponse
+    @Request() req: AuthenticatedRequest,
+    @Response({ passthrough: true }) response: ExpressResponse,
   ): Promise<LoginResponseDto> {
     const token = req.cookies.refresh_token || bodyToken;
     if (!token) {
@@ -111,11 +120,11 @@ export class AuthController {
       sameSite: 'lax',
       maxAge: 0.5 * 60 * 1000,
       path: '/',
-    })
+    });
 
     return {
       ...result,
-      refresh_token: token
+      refresh_token: token,
     };
   }
 
@@ -126,7 +135,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  async logout(@Response({ passthrough: true }) response: ExpressResponse) {
+  logout(@Response({ passthrough: true }) response: ExpressResponse) {
     response.clearCookie('access_token');
     response.clearCookie('refresh_token');
 
