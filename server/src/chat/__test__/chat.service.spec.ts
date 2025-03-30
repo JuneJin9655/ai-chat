@@ -1,43 +1,57 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ChatService } from '../chat.service';
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { ChatSession } from '../entities/chat_sessions.entity';
+import { ChatMessage } from '../entities/chat_messages.entity';
 import OpenAI from 'openai';
-import { UnauthorizedException } from '@nestjs/common';
 
 jest.mock('openai');
 
 describe('ChatService', () => {
   let service: ChatService;
-  let mockCreate: jest.Mock;
+  let mockCreateCompletion: jest.Mock;
+
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue('fake-api-key'),
+  };
+
+  const mockChatSessionRepo = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+  };
+
+  const mockChatMessageRepo = {
+    find: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+  };
 
   beforeEach(async () => {
-    mockCreate = jest.fn();
-    (OpenAI as jest.MockedClass<typeof OpenAI>).mockImplementation(
-      () =>
-        ({
-          chat: {
-            completions: {
-              create: mockCreate,
-            },
-          },
-        }) as unknown as OpenAI,
-    );
+    // Mock OpenAI API
+    mockCreateCompletion = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'AI response' } }],
+    });
+    (OpenAI as unknown as jest.Mock).mockImplementation(() => ({
+      chat: { completions: { create: mockCreateCompletion } },
+    }));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChatService,
         {
           provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockImplementation((key: string) => {
-              switch (key) {
-                case 'OPENAI_API_KEY':
-                  return 'mock-api-key';
-                default:
-                  return null;
-              }
-            }),
-          },
+          useValue: mockConfigService,
+        },
+        {
+          provide: getRepositoryToken(ChatSession),
+          useValue: mockChatSessionRepo,
+        },
+        {
+          provide: getRepositoryToken(ChatMessage),
+          useValue: mockChatMessageRepo,
         },
       ],
     }).compile();
@@ -45,109 +59,179 @@ describe('ChatService', () => {
     service = module.get<ChatService>(ChatService);
   });
 
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2025-03-30T04:30:40.074Z'));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
   describe('chatWithAI', () => {
-    it('should return AI response', async () => {
-      const mockResponse = {
-        id: 'chatcmpl-123',
-        object: 'chat.completion',
-        created: 1677652288,
-        model: 'gpt-4',
-        choices: [
-          {
-            message: {
-              content: 'Hello human',
-              role: 'assistant',
-            },
-            index: 0,
-            finish_reason: 'stop',
-          },
-        ],
-        usage: {
-          total_tokens: 10,
-          completion_tokens: 5,
-          prompt_tokens: 5,
-        },
-      } as unknown as OpenAI.Chat.ChatCompletion;
+    const mockChatId = 'test-chat-id';
+    const mockMessage = 'Hello AI';
+    const mockDate = '2025-03-30T04:30:40.074Z';
+    const mockChat = {
+      id: mockChatId,
+      userId: 'test-user-id',
+      messages: [],
+      createdAt: new Date(mockDate),
+    } as ChatSession;
+    const mockUserMessage = {
+      id: '1',
+      chat: mockChat,
+      role: 'user',
+      content: mockMessage,
+      timestamp: new Date(mockDate),
+    } as ChatMessage;
+    const mockAIMessage = {
+      id: '2',
+      chat: mockChat,
+      role: 'assistant',
+      content: 'AI response',
+      timestamp: new Date(mockDate),
+    } as ChatMessage;
 
-      mockCreate.mockResolvedValue(mockResponse);
+    beforeEach(() => {
+      mockChatSessionRepo.findOne.mockResolvedValue(mockChat);
+      let messageCounter = 0;
+      mockChatMessageRepo.create.mockImplementation(
+        (data: Partial<ChatMessage>): ChatMessage => ({
+          id: data.id || String(++messageCounter),
+          chat: data.chat || mockChat,
+          role: data.role || 'user',
+          content: data.content || '',
+          timestamp: data.timestamp || new Date(mockDate),
+        }),
+      );
+      mockChatMessageRepo.save
+        .mockResolvedValueOnce(mockUserMessage)
+        .mockResolvedValueOnce(mockAIMessage);
+      mockChatMessageRepo.find.mockResolvedValue([]);
+    });
 
-      const result = await service.chatWithAI('Hello AI');
+    it('should process chat message and return response', async () => {
+      const result = await service.chatWithAI(mockChatId, mockMessage);
+
+      expect(mockChatSessionRepo.findOne).toHaveBeenCalledWith({
+        where: { id: mockChatId },
+        relations: ['messages'],
+      });
+      expect(mockChatMessageRepo.create).toHaveBeenCalledTimes(2);
+      expect(mockChatMessageRepo.save).toHaveBeenCalledTimes(2);
+      expect(mockCreateCompletion).toHaveBeenCalled();
       expect(result).toEqual({
-        message: 'Hello human',
-        usage: {
-          total_tokens: 10,
-          completion_tokens: 5,
-          prompt_tokens: 5,
-        },
+        chatId: mockChatId,
+        messages: [mockUserMessage, mockAIMessage],
       });
     });
 
-    it('should handle API errors', async () => {
-      mockCreate.mockRejectedValue(new Error('API Error'));
+    it('should throw error if OpenAI API call fails', async () => {
+      mockCreateCompletion.mockRejectedValue(new Error('OpenAI API Error'));
 
-      await expect(service.chatWithAI('Hello AI')).rejects.toThrow(
-        'Failed to chat with AI: API Error',
+      await expect(service.chatWithAI(mockChatId, mockMessage)).rejects.toThrow(
+        'Failed to chat with AI: OpenAI API Error',
       );
     });
 
-    it('should validate message format', async () => {
-      // 测试空消息
-      mockCreate.mockRejectedValue(new Error('Empty message'));
-      await expect(service.chatWithAI('')).rejects.toThrow();
+    it('should throw error if chat session not found', async () => {
+      mockChatSessionRepo.findOne.mockResolvedValue(null);
 
-      // 测试超长消息
-      const longMessage = 'x'.repeat(10000);
-      mockCreate.mockRejectedValue(new Error('Message too long'));
-      await expect(service.chatWithAI(longMessage)).rejects.toThrow();
+      await expect(service.chatWithAI(mockChatId, mockMessage)).rejects.toThrow(
+        'Failed to chat with AI: Chat session not Found',
+      );
     });
   });
 
-  it('should respect rate limits', async () => {
-    const mockResponse = {
-      id: 'chatcmpl-123',
-      object: 'chat.completion',
-      created: 1677652288,
-      model: 'gpt-4',
-      choices: [
-        {
-          message: {
-            content: 'Hello human',
-            role: 'assistant',
-          },
-          index: 0,
-          finish_reason: 'stop',
-        },
-      ],
-      usage: {
-        total_tokens: 10,
-        completion_tokens: 5,
-        prompt_tokens: 5,
-      },
-    } as unknown as OpenAI.Chat.ChatCompletion;
+  describe('getAllChats', () => {
+    const mockUserId = 'test-user-id';
+    const mockChats = [
+      { id: '1', userId: mockUserId, messages: [], createdAt: new Date() },
+      { id: '2', userId: mockUserId, messages: [], createdAt: new Date() },
+    ] as ChatSession[];
 
-    mockCreate
-      .mockResolvedValueOnce(mockResponse)
-      .mockRejectedValueOnce(new Error('Too Many Requests'));
+    it('should return all chats for user', async () => {
+      mockChatSessionRepo.find.mockResolvedValue(mockChats);
 
-    // 第一次请求成功
-    await service.chatWithAI('test');
-    // 第二次请求应该失败
-    await expect(service.chatWithAI('test')).rejects.toThrow(
-      'Failed to chat with AI: Too Many Requests',
-    );
+      const result = await service.getAllChats(mockUserId);
+
+      expect(mockChatSessionRepo.find).toHaveBeenCalledWith({
+        where: { userId: mockUserId },
+        order: { createdAt: 'DESC' },
+        relations: ['messages'],
+      });
+      expect(result).toEqual(mockChats);
+    });
+
+    it('should return empty array when no chats exist', async () => {
+      mockChatSessionRepo.find.mockResolvedValue([]);
+
+      const result = await service.getAllChats(mockUserId);
+
+      expect(mockChatSessionRepo.find).toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
   });
 
-  it('should require authentication', async () => {
-    const message = 'test';
-    jest
-      .spyOn(service, 'chatWithAI')
-      .mockRejectedValue(new UnauthorizedException());
-    await expect(service.chatWithAI(message)).rejects.toThrow(
-      UnauthorizedException,
-    );
+  describe('createNewChat', () => {
+    const mockUserId = 'test-user-id';
+    const mockNewChat = {
+      userId: mockUserId,
+      title: 'New Chat 3/30/2025',
+      messages: [],
+      createdAt: new Date(),
+      id: '1',
+    } as ChatSession;
+
+    it('should create new chat session', async () => {
+      mockChatSessionRepo.create.mockReturnValue(mockNewChat);
+      mockChatSessionRepo.save.mockResolvedValue({ ...mockNewChat, id: '1' });
+
+      const result = await service.createNewChat(mockUserId);
+
+      expect(mockChatSessionRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockUserId,
+          title: expect.stringContaining('New Chat') as unknown as string,
+          messages: [],
+        }),
+      );
+      expect(mockChatSessionRepo.save).toHaveBeenCalledWith(mockNewChat);
+      expect(result).toEqual({ ...mockNewChat, id: '1' });
+    });
+  });
+
+  describe('getChatById', () => {
+    const mockChatId = 'test-chat-id';
+    const mockChat = {
+      id: mockChatId,
+      userId: 'test-user-id',
+      messages: [],
+      createdAt: new Date(),
+    } as ChatSession;
+
+    it('should return chat by id', async () => {
+      mockChatSessionRepo.findOne.mockResolvedValue(mockChat);
+
+      const result = await service.getChatById(mockChatId);
+
+      expect(mockChatSessionRepo.findOne).toHaveBeenCalledWith({
+        where: { id: mockChatId },
+        relations: ['messages'],
+      });
+      expect(result).toEqual(mockChat);
+    });
+
+    it('should return null if chat not found', async () => {
+      mockChatSessionRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getChatById(mockChatId);
+
+      expect(result).toBeNull();
+    });
   });
 });
