@@ -17,7 +17,8 @@ export class RolesGurad implements CanActivate {
       return true;
     }
 
-    const user = context.switchToHttp().getRequest<Request>().user as {
+    const user = context.switchToHttp().getRequest<Request>()
+      .user as unknown as {
       role: Role;
     };
     return requiredRoles.some((role) => user?.role === role);
