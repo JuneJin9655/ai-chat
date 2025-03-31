@@ -9,9 +9,8 @@ import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-store';
 import { ChatModule } from './chat/chat.module';
+import { RedisModule } from '@nestjs-modules/ioredis';
 
 @Module({
   imports: [
@@ -19,19 +18,18 @@ import { ChatModule } from './chat/chat.module';
       load: [configuration],
       isGlobal: true,
     }),
-    CacheModule.registerAsync({
+    RedisModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        store: await redisStore({
-          socket: {
-            host: configService.get<string>('redis.host'),
-            port: configService.get<number>('redis.port'),
-          },
-          ttl: 300,
-        }),
+      useFactory: (configService: ConfigService) => ({
+        type: 'single',
+        url: `redis://${configService.get<string>('redis.host') || 'localhost'}:${configService.get<number>('redis.port') || 6379}`,
+        password: configService.get<string>('redis.password'),
+        db:
+          process.env.NODE_ENV !== 'production'
+            ? configService.get<number>('redis.db') || 0
+            : 1,
       }),
-      isGlobal: true,
     }),
     ThrottlerModule.forRoot({
       throttlers: [

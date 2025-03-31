@@ -23,6 +23,7 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noFallthroughCasesInSwitch": true,
-    "strictBindCallApply": true
+    "strictBindCallApply": true,
+    "isolatedModules": true
   }
 }

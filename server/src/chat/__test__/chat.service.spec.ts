@@ -5,6 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ChatSession } from '../entities/chat_sessions.entity';
 import { ChatMessage } from '../entities/chat_messages.entity';
 import OpenAI from 'openai';
+import { RedisService } from '../../common/services/redis.service';
 
 jest.mock('openai');
 
@@ -27,6 +28,20 @@ describe('ChatService', () => {
     find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    count: jest.fn(),
+  };
+
+  const mockRedisService = {
+    redis: {
+      get: jest.fn().mockResolvedValue(null),
+      setex: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+      keys: jest.fn().mockResolvedValue([]),
+    },
+    cacheChatMessages: jest.fn(),
+    getCachedChatMessages: jest.fn(),
+    invalidateChatCache: jest.fn(),
+    updateChatPopularity: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -52,6 +67,10 @@ describe('ChatService', () => {
         {
           provide: getRepositoryToken(ChatMessage),
           useValue: mockChatMessageRepo,
+        },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
         },
       ],
     }).compile();
@@ -112,6 +131,9 @@ describe('ChatService', () => {
         .mockResolvedValueOnce(mockUserMessage)
         .mockResolvedValueOnce(mockAIMessage);
       mockChatMessageRepo.find.mockResolvedValue([]);
+
+      // 重置 Redis 模拟
+      mockRedisService.invalidateChatCache.mockResolvedValue(undefined);
     });
 
     it('should process chat message and return response', async () => {
@@ -124,6 +146,12 @@ describe('ChatService', () => {
       expect(mockChatMessageRepo.create).toHaveBeenCalledTimes(2);
       expect(mockChatMessageRepo.save).toHaveBeenCalledTimes(2);
       expect(mockCreateCompletion).toHaveBeenCalled();
+
+      // 验证缓存失效处理
+      expect(mockRedisService.invalidateChatCache).toHaveBeenCalledWith(
+        mockChatId,
+      );
+
       expect(result).toEqual({
         chatId: mockChatId,
         messages: [mockUserMessage, mockAIMessage],
@@ -142,7 +170,7 @@ describe('ChatService', () => {
       mockChatSessionRepo.findOne.mockResolvedValue(null);
 
       await expect(service.chatWithAI(mockChatId, mockMessage)).rejects.toThrow(
-        'Failed to chat with AI: Chat session not Found',
+        `Failed to chat with AI: Chat session with ID ${mockChatId} not found`,
       );
     });
   });

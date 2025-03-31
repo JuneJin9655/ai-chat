@@ -145,9 +145,9 @@ describe('ChatController', () => {
     });
 
     it('should throw error if message is missing', async () => {
-      await expect(controller.chatWithAI(mockChatId, {})).rejects.toThrow(
-        'Message content is required',
-      );
+      await expect(
+        controller.chatWithAI(mockChatId, { message: '' }),
+      ).rejects.toThrow('Message content is required');
     });
   });
 });

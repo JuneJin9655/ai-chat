@@ -1,16 +1,16 @@
 import { Repository } from 'typeorm';
 import { AuthService } from '../auth.service';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../../users/entities/user.entity';
 import { RefreshToken } from '../entities/refresh-token.entity';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from 'src/users/users.service';
+import { UsersService } from '../../users/users.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Role } from 'src/common/enums/roles.enum';
+import { Role } from '../../common/enums/roles.enum';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { CacheModule } from '@nestjs/cache-manager';
+import { RedisService } from '../../common/services/redis.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -18,10 +18,22 @@ describe('AuthService', () => {
   let refreshTokenRepository: Repository<RefreshToken>;
   let jwtService: JwtService;
   let usersService: UsersService;
+  let redisService: RedisService;
+
+  const mockRedisService = {
+    redis: {
+      get: jest.fn().mockResolvedValue(null),
+      setex: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+      keys: jest.fn().mockResolvedValue([]),
+    },
+    cacheChatMessages: jest.fn(),
+    getCachedChatMessages: jest.fn(),
+    invalidateChatCache: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [CacheModule.register()],
       providers: [
         AuthService,
         {
@@ -58,6 +70,10 @@ describe('AuthService', () => {
             create: jest.fn(),
           },
         },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
       ],
     }).compile();
 
@@ -68,6 +84,12 @@ describe('AuthService', () => {
     );
     jwtService = module.get<JwtService>(JwtService);
     usersService = module.get<UsersService>(UsersService);
+    redisService = module.get<RedisService>(RedisService);
+  });
+
+  // 重置所有 mock 数据
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -135,12 +157,27 @@ describe('AuthService', () => {
         .mockResolvedValue(mockRefreshToken);
       jest.spyOn(jwtService, 'sign').mockReturnValue('mock.jwt.token');
 
+      // 确保 Redis 模拟正确返回
+      jest.spyOn(redisService.redis, 'get').mockResolvedValue(null);
+      const setexSpy = jest
+        .spyOn(redisService.redis, 'setex')
+        .mockResolvedValue('OK');
+      const delSpy = jest.spyOn(redisService.redis, 'del').mockResolvedValue(1);
+
       const result = await service.login(username, password);
 
       expect(result).toEqual({
         access_token: 'mock.jwt.token',
         refresh_token: 'mock.refresh.token',
       });
+
+      // 验证 Redis 方法被正确调用
+      expect(setexSpy).toHaveBeenCalledWith(
+        `auth_token_${mockUser.id}`,
+        3600,
+        'mock.jwt.token',
+      );
+      expect(delSpy).toHaveBeenCalledWith(`login_failed_${username}`);
     });
 
     it('should throw UnauthorizedException when user not found', async () => {
@@ -149,8 +186,21 @@ describe('AuthService', () => {
 
       jest.spyOn(userRepository, 'findOne').mockResolvedValue(null);
 
+      // 模拟失败登录尝试计数
+      jest.spyOn(redisService.redis, 'get').mockResolvedValue(null);
+      const setexSpy = jest
+        .spyOn(redisService.redis, 'setex')
+        .mockResolvedValue('OK');
+
       await expect(service.login(username, password)).rejects.toThrow(
         UnauthorizedException,
+      );
+
+      // 验证失败尝试次数增加
+      expect(setexSpy).toHaveBeenCalledWith(
+        `login_failed_${username}`,
+        300,
+        '1',
       );
     });
 
@@ -171,9 +221,37 @@ describe('AuthService', () => {
 
       jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
 
+      // 模拟失败登录尝试计数
+      jest.spyOn(redisService.redis, 'get').mockResolvedValue(null);
+      const setexSpy = jest
+        .spyOn(redisService.redis, 'setex')
+        .mockResolvedValue('OK');
+
       await expect(service.login(username, password)).rejects.toThrow(
         UnauthorizedException,
       );
+
+      // 验证失败尝试次数增加
+      expect(setexSpy).toHaveBeenCalledWith(
+        `login_failed_${username}`,
+        300,
+        '1',
+      );
+    });
+
+    it('should throw UnauthorizedException when too many failed attempts', async () => {
+      const username = 'testuser';
+      const password = 'password123';
+
+      // 模拟 5 次失败尝试
+      jest.spyOn(redisService.redis, 'get').mockResolvedValue('5');
+      const findOneSpy = jest.spyOn(userRepository, 'findOne');
+
+      await expect(service.login(username, password)).rejects.toThrow(
+        'Too many failed attempts. Try again later.',
+      );
+
+      expect(findOneSpy).not.toHaveBeenCalled();
     });
   });
 

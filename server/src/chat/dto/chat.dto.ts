@@ -1,4 +1,8 @@
-export class ChatRequestDto {
+import { IsNotEmpty, IsString } from 'class-validator';
+
+export class ChatMessageDto {
+  @IsNotEmpty()
+  @IsString()
   message!: string;
 }
 

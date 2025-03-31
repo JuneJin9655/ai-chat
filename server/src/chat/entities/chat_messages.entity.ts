@@ -4,10 +4,12 @@ import {
   Entity,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 import { ChatSession } from './chat_sessions.entity';
 
 @Entity('chat_messages')
+@Index(['chat', 'timestamp'])
 export class ChatMessage {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

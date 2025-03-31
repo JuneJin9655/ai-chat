@@ -1,22 +1,16 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  Logger,
-  Inject,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from 'src/users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
-import { UsersService } from 'src/users/users.service';
+import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
-import { Role } from 'src/common/enums/roles.enum';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Role } from '../common/enums/roles.enum';
+import { RedisService } from '../common/services/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +18,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly redisService: RedisService,
     @InjectRepository(RefreshToken)
     private refreshTokenRepository: Repository<RefreshToken>,
     private configService: ConfigService,
@@ -53,9 +47,13 @@ export class AuthService {
     password: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
     try {
-      const failedAttempts = await this.cacheManager.get<number>(
-        `login_failed_${username}`,
-      );
+      const failedAttemptsKey = `login_failed_${username}`;
+      const failedAttemptsData =
+        await this.redisService.redis.get(failedAttemptsKey);
+      const failedAttempts = failedAttemptsData
+        ? parseInt(failedAttemptsData, 10)
+        : 0;
+
       if (failedAttempts && failedAttempts >= 5) {
         throw new UnauthorizedException(
           'Too many failed attempts. Try again later.',
@@ -94,21 +92,30 @@ export class AuthService {
         expiresIn: accessExpiresIn,
       });
 
-      await this.cacheManager.set(`auth_token_${user.id}`, token, 3600);
-      await this.cacheManager.del(`login_failed_${username}`);
+      // 缓存访问令牌
+      await this.redisService.redis.setex(`auth_token_${user.id}`, 3600, token);
+      // 清除失败尝试计数
+      await this.redisService.redis.del(failedAttemptsKey);
 
       return {
         access_token: token,
         refresh_token: refreshToken.token,
       };
     } catch (error: unknown) {
-      const attempts =
-        (await this.cacheManager.get<number>(`login_failed_${username}`)) || 0;
-      await this.cacheManager.set(
-        `login_failed_${username}`,
-        attempts + 1,
+      const failedAttemptsKey = `login_failed_${username}`;
+      const failedAttemptsData =
+        await this.redisService.redis.get(failedAttemptsKey);
+      const attempts = failedAttemptsData
+        ? parseInt(failedAttemptsData, 10)
+        : 0;
+
+      // 设置失败尝试计数，5分钟过期
+      await this.redisService.redis.setex(
+        failedAttemptsKey,
         300,
-      ); // 30分钟过期
+        (attempts + 1).toString(),
+      );
+
       if (error instanceof UnauthorizedException) {
         throw error;
       }

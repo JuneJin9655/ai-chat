@@ -1,7 +1,22 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
-import { Request } from 'express';
+import type { ChatSession } from './entities/chat_sessions.entity';
+import { AuthGuard } from '@nestjs/passport';
+import { ChatMessageDto } from './dto/chat.dto';
+import type { Request } from 'express';
 
+// 声明Express请求对象中的用户属性
 declare module 'express' {
   interface Request {
     user?: {
@@ -10,41 +25,117 @@ declare module 'express' {
   }
 }
 
+// 添加接口定义
+interface ChatMessagesResponse {
+  messages: {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  source: 'cache' | 'database';
+  queryTime?: number;
+}
+
+interface ChatWithAIResponse {
+  chatId: string;
+  messages: {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }[];
+}
+
+interface CacheStats {
+  hitRate: string;
+  hits: number;
+  misses: number;
+  redisInfo: Record<string, string>;
+}
+
 @Controller('chat')
+@UseGuards(AuthGuard('jwt')) // Protect all routes with JWT authentication
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
-  @Post('new')
-  async createChat(@Req() req: Request) {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw new Error('Unauthorized: No user ID found');
+  @Get(':chatId/messages')
+  async getChatMessages(
+    @Param('chatId') chatId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20',
+  ): Promise<ChatMessagesResponse> {
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+
+    if (
+      Number.isNaN(pageNum) ||
+      Number.isNaN(limitNum) ||
+      pageNum < 1 ||
+      limitNum < 1
+    ) {
+      throw new BadRequestException('Page and limit must be positive numbers');
     }
-    return this.chatService.createNewChat(userId);
+
+    const result = (await this.chatService.getChatMessages(
+      chatId,
+      pageNum,
+      limitNum,
+    )) as ChatMessagesResponse;
+    return result;
+  }
+
+  @Post('new')
+  async createChat(@Req() req: Request): Promise<ChatSession> {
+    const userId = req.user?.id;
+    if (!userId)
+      throw new UnauthorizedException('Unauthorized: No user ID found');
+    const chat: ChatSession = await this.chatService.createNewChat(userId);
+    return chat;
   }
 
   @Get('all')
-  async getAllChats(@Req() req: Request) {
+  async getAllChats(@Req() req: Request): Promise<ChatSession[]> {
     const userId = req.user?.id;
-    if (!userId) {
-      throw new Error('Unauthorized: No user ID found');
-    }
-    return this.chatService.getAllChats(userId);
+    if (!userId)
+      throw new UnauthorizedException('Unauthorized: No user ID found');
+    const chats: ChatSession[] = await this.chatService.getAllChats(userId);
+    return chats;
   }
 
   @Get(':chatId')
-  async getChatById(@Param('chatId') chatId: string) {
-    return this.chatService.getChatById(chatId);
+  async getChatById(
+    @Param('chatId') chatId: string,
+  ): Promise<ChatSession | null> {
+    const chat: ChatSession | null = await this.chatService.getChatById(chatId);
+    return chat;
   }
 
-  @Post(':chatId')
+  @Post(':chatId/message')
   async chatWithAI(
     @Param('chatId') chatId: string,
-    @Body() body: { message?: string },
-  ) {
-    if (!body.message) {
-      throw new Error('Message content is required');
+    @Body() body: ChatMessageDto,
+  ): Promise<ChatWithAIResponse> {
+    if (!body.message.trim()) {
+      throw new BadRequestException('Message content is required');
     }
-    return this.chatService.chatWithAI(chatId, body.message);
+    const response = (await this.chatService.chatWithAI(
+      chatId,
+      body.message,
+    )) as ChatWithAIResponse;
+    return response;
+  }
+
+  @Get('stats/cache')
+  async getCacheStats(): Promise<CacheStats> {
+    const stats =
+      (await this.chatService.getCacheStats()) as unknown as CacheStats;
+    return stats;
   }
 }
