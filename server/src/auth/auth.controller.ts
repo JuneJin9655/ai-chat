@@ -18,7 +18,7 @@ import { CustomThrottlerGuard } from 'src/common/gurads/throttler.guard';
 import { UserDto } from 'src/users/dto/user.dto';
 import { Role } from '../common/enums/roles.enum';
 import { Public } from 'src/common/decorators/public.decorator';
-import { Response as ExpressResponse } from 'express';
+import type { Response as ExpressResponse } from 'express';
 import { ConfigService } from '@nestjs/config';
 
 export interface AuthenticatedRequest extends Request {
