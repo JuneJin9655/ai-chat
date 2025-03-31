@@ -3,7 +3,7 @@ import { ChatController } from '../chat.controller';
 import { ChatService } from '../chat.service';
 import { ChatSession } from '../entities/chat_sessions.entity';
 import { ChatMessage } from '../entities/chat_messages.entity';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 describe('ChatController', () => {
   let controller: ChatController;
@@ -40,6 +40,7 @@ describe('ChatController', () => {
     getAllChats: jest.fn(),
     createNewChat: jest.fn(),
     getChatById: jest.fn(),
+    chatWithAIStream: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -148,6 +149,95 @@ describe('ChatController', () => {
       await expect(
         controller.chatWithAI(mockChatId, { message: '' }),
       ).rejects.toThrow('Message content is required');
+    });
+  });
+
+  describe('chatWithAIStream', () => {
+    const mockMessage = 'Hello AI';
+    const mockResponse = {
+      setHeader: jest.fn(),
+      write: jest.fn(),
+      end: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+      headersSent: false,
+    } as unknown as Response;
+
+    const mockStreamContent = [
+      { choices: [{ delta: { content: 'Hello' } }] },
+      { choices: [{ delta: { content: ' World' } }] },
+    ];
+
+    const mockStreamGenerator = async function* () {
+      await Promise.resolve();
+      for (const content of mockStreamContent) {
+        yield content;
+      }
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should process streaming chat message', async () => {
+      const mockSaveResponse = jest.fn();
+      mockChatService.chatWithAIStream.mockResolvedValue({
+        stream: mockStreamGenerator(),
+        saveResponse: mockSaveResponse,
+      });
+
+      await controller.chatWithAIStream(
+        mockChatId,
+        { message: mockMessage },
+        mockResponse,
+      );
+      const setHeaderSpy = jest.spyOn(mockResponse, 'setHeader');
+      const writeSpy = jest.spyOn(mockResponse, 'write');
+      const endSpy = jest.spyOn(mockResponse, 'end');
+
+      expect(setHeaderSpy).toHaveBeenCalledWith(
+        'Content-Type',
+        'text/event-stream',
+      );
+      expect(setHeaderSpy).toHaveBeenCalledWith('Cache-Control', 'no-cache');
+      expect(setHeaderSpy).toHaveBeenCalledWith('Connection', 'keep-alive');
+
+      expect(writeSpy).toHaveBeenNthCalledWith(
+        1,
+        'data: {"content":"Hello"}\n\n',
+      );
+      expect(writeSpy).toHaveBeenNthCalledWith(
+        2,
+        'data: {"content":" World"}\n\n',
+      );
+      expect(writeSpy).toHaveBeenNthCalledWith(3, 'data: [DONE]\n\n');
+
+      expect(endSpy).toHaveBeenCalled();
+      expect(mockSaveResponse).toHaveBeenCalledWith('Hello World');
+    });
+
+    it('should throw error if message is missing', async () => {
+      await expect(
+        controller.chatWithAIStream(mockChatId, { message: '' }, mockResponse),
+      ).rejects.toThrow('Message content is required');
+    });
+
+    it('should handle stream errors', async () => {
+      const error = new Error('Stream error');
+      mockChatService.chatWithAIStream.mockRejectedValue(error);
+
+      await controller.chatWithAIStream(
+        mockChatId,
+        { message: mockMessage },
+        mockResponse,
+      );
+      const statusSpy = jest.spyOn(mockResponse, 'status');
+
+      expect(statusSpy).toHaveBeenCalledWith(500);
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        error: 'Error processing stream',
+        message: 'Stream error',
+      });
     });
   });
 });

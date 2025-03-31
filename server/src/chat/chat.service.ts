@@ -179,6 +179,72 @@ export class ChatService {
     });
   }
 
+  // Stream API
+  async chatWithAIStream(chatId: string, message: string) {
+    try {
+      const chat = await this.chatSessionRepo.findOne({
+        where: { id: chatId },
+        relations: ['messages'],
+      });
+      if (!chat) {
+        throw new NotFoundException(`Chat session with ID ${chatId} not found`);
+      }
+
+      const userMessage = this.chatMessageRepo.create({
+        chat,
+        role: 'user',
+        content: message,
+      });
+      await this.chatMessageRepo.save(userMessage);
+
+      const messages = await this.chatMessageRepo.find({
+        where: { chat },
+        order: { timestamp: 'ASC' },
+      });
+
+      const contextMessages = this.getContextWindow(messages);
+
+      const stream = await this.openai.chat.completions.create({
+        messages: contextMessages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+        model: 'gpt-4o-mini',
+        stream: true,
+      });
+
+      return {
+        stream,
+        userMessage,
+        chat,
+        saveResponse: async (content: string) => {
+          const aiMessage = this.chatMessageRepo.create({
+            chat,
+            role: 'assistant' as const,
+            content: content,
+          });
+          await this.chatMessageRepo.save(aiMessage);
+          await this.redisService.invalidateChatCache(chatId);
+          return aiMessage;
+        },
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to stream chat with AI: ${error.message}`);
+      }
+      throw new Error('Unknown error occurred');
+    }
+  }
+
+  private getContextWindow(messages: ChatMessage[], maxMessages = 10) {
+    if (messages.length <= maxMessages) return messages;
+
+    // 简单方法：保留最新的N条消息
+    return messages.slice(-maxMessages);
+
+    // 更复杂的方法可以根据token数量等进行限制
+  }
+
   //--------------testing---------------//
   async getCacheStats(): Promise<CacheStats> {
     const stats = await this.redisService.getCacheStats();
