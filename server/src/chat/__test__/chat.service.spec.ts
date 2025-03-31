@@ -108,6 +108,142 @@ describe('ChatService', () => {
     expect(service).toBeDefined();
   });
 
+  describe('chatWithAIStream', () => {
+    const mockChatId = 'test-chat-id';
+    const mockMessage = 'Hello AI';
+    const mockDate = '2025-03-30T04:30:40.074Z';
+    const mockChat = {
+      id: mockChatId,
+      userId: 'test-user-id',
+      messages: [],
+      createdAt: new Date(mockDate),
+    } as ChatSession;
+    const mockUserMessage = {
+      id: '1',
+      chat: mockChat,
+      role: 'user',
+      content: mockMessage,
+      timestamp: new Date(mockDate),
+    } as ChatMessage;
+    const mockAIMessage = {
+      id: '2',
+      chat: mockChat,
+      role: 'assistant',
+      content: '', // 初始为空，将在流中累积
+      timestamp: new Date(mockDate),
+    } as ChatMessage;
+
+    beforeEach(() => {
+      mockChatSessionRepo.findOne.mockResolvedValue(mockChat);
+      mockChatMessageRepo.create.mockImplementation(
+        (data: Partial<ChatMessage>): ChatMessage => ({
+          id: data.id || `msg-${Math.random().toString(36).substr(2, 9)}`,
+          chat: data.chat || mockChat,
+          role: data.role || 'user',
+          content: data.content || '',
+          timestamp: data.timestamp || new Date(mockDate),
+        }),
+      );
+
+      // 保存用户消息和初始 AI 消息
+      mockChatMessageRepo.save
+        .mockResolvedValueOnce(mockUserMessage)
+        .mockResolvedValueOnce({ ...mockAIMessage });
+
+      mockChatMessageRepo.find.mockResolvedValue([]);
+
+      // ✅ 确保 Redis 模拟清空缓存
+      mockRedisService.invalidateChatCache.mockResolvedValue(undefined);
+    });
+
+    it('should process streaming chat message and return proper response objects', async () => {
+      const getOptimizedContextWindowSpy = jest
+        .spyOn(service as any, 'getOptimizedContextWindow')
+        .mockReturnValue([mockUserMessage]);
+
+      const { stream, saveResponse } = await service.chatWithAIStream(
+        mockChatId,
+        mockMessage,
+      );
+
+      expect(mockChatSessionRepo.findOne).toHaveBeenCalledWith({
+        where: { id: mockChatId },
+        relations: ['messages'],
+      });
+
+      expect(getOptimizedContextWindowSpy).toHaveBeenCalled();
+
+      expect(mockChatMessageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chat: mockChat,
+          role: 'user',
+          content: mockMessage,
+        }),
+      );
+
+      expect(mockChatMessageRepo.create).toHaveBeenCalledTimes(1);
+      expect(mockChatMessageRepo.save).toHaveBeenCalledTimes(1);
+
+      expect(mockCreateCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({ stream: true }),
+      );
+
+      expect(mockRedisService.invalidateChatCache).not.toHaveBeenCalled();
+
+      expect(stream).toBeDefined();
+      expect(saveResponse).toBeDefined();
+      expect(typeof saveResponse).toBe('function');
+
+      // ✅ 测试 `saveResponse` 功能
+      mockChatMessageRepo.save.mockClear();
+      mockRedisService.invalidateChatCache.mockClear();
+      await saveResponse('Hello World');
+      expect(mockChatMessageRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Hello World',
+        }),
+      );
+      expect(mockRedisService.invalidateChatCache).toHaveBeenCalledWith(
+        mockChatId,
+      );
+
+      getOptimizedContextWindowSpy.mockRestore();
+    });
+
+    it('should throw error if OpenAI API call fails', async () => {
+      mockCreateCompletion.mockRejectedValueOnce(new Error('OpenAI API Error'));
+
+      await expect(
+        service.chatWithAIStream(mockChatId, mockMessage),
+      ).rejects.toThrow('Failed to stream chat with AI: OpenAI API Error');
+    });
+
+    it('should throw error if chat session not found', async () => {
+      mockChatSessionRepo.findOne.mockResolvedValueOnce(null);
+
+      await expect(
+        service.chatWithAIStream(mockChatId, mockMessage),
+      ).rejects.toThrow(
+        `Failed to stream chat with AI: Chat session with ID ${mockChatId} not found`,
+      );
+    });
+
+    it('should handle streaming content correctly', async () => {
+      const { stream } = await service.chatWithAIStream(
+        mockChatId,
+        mockMessage,
+      );
+
+      let fullContent = '';
+      for await (const chunk of stream) {
+        fullContent += chunk.choices[0]?.delta?.content || '';
+      }
+
+      expect(fullContent).toBe('Hello World');
+    });
+  });
+
   describe('chatWithAI', () => {
     const mockChatId = 'test-chat-id';
     const mockMessage = 'Hello AI';
@@ -155,6 +291,11 @@ describe('ChatService', () => {
     });
 
     it('should process chat message and return response', async () => {
+      // 添加spy来验证getOptimizedContextWindow的调用
+      const getOptimizedContextWindowSpy = jest
+        .spyOn(service as any, 'getOptimizedContextWindow')
+        .mockReturnValue([mockUserMessage]);
+
       const result = await service.chatWithAI(mockChatId, mockMessage);
 
       expect(mockChatSessionRepo.findOne).toHaveBeenCalledWith({
@@ -163,17 +304,21 @@ describe('ChatService', () => {
       });
       expect(mockChatMessageRepo.create).toHaveBeenCalledTimes(2);
       expect(mockChatMessageRepo.save).toHaveBeenCalledTimes(2);
-      expect(mockCreateCompletion).toHaveBeenCalled();
 
-      // 验证缓存失效处理
+      // 验证使用了优化上下文窗口
+      expect(getOptimizedContextWindowSpy).toHaveBeenCalled();
+
+      expect(mockCreateCompletion).toHaveBeenCalled();
       expect(mockRedisService.invalidateChatCache).toHaveBeenCalledWith(
         mockChatId,
       );
-
       expect(result).toEqual({
         chatId: mockChatId,
         messages: [mockUserMessage, mockAIMessage],
       });
+
+      // 清理spy
+      getOptimizedContextWindowSpy.mockRestore();
     });
 
     it('should throw error if OpenAI API call fails', async () => {
@@ -332,6 +477,11 @@ describe('ChatService', () => {
     });
 
     it('should process streaming chat message and return proper response objects', async () => {
+      // 添加spy来验证getOptimizedContextWindow的调用
+      const getOptimizedContextWindowSpy = jest
+        .spyOn(service as any, 'getOptimizedContextWindow')
+        .mockReturnValue([mockUserMessage]);
+
       const { stream, saveResponse } = await service.chatWithAIStream(
         mockChatId,
         mockMessage,
@@ -341,6 +491,9 @@ describe('ChatService', () => {
         where: { id: mockChatId },
         relations: ['messages'],
       });
+
+      // 验证使用了优化上下文窗口
+      expect(getOptimizedContextWindowSpy).toHaveBeenCalled();
 
       // 验证用户消息创建和保存
       expect(mockChatMessageRepo.create).toHaveBeenCalledWith(
@@ -386,6 +539,9 @@ describe('ChatService', () => {
       expect(mockRedisService.invalidateChatCache).toHaveBeenCalledWith(
         mockChatId,
       );
+
+      // 清理spy
+      getOptimizedContextWindowSpy.mockRestore();
     });
 
     it('should throw error if OpenAI API call fails', async () => {

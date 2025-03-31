@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ChatMessage } from './entities/chat_messages.entity';
 import { Repository } from 'typeorm';
 import { RedisService } from '../common/services/redis.service';
+import { encoding_for_model, Tiktoken } from '@dqbd/tiktoken';
 
 interface CacheStats {
   hitRate: string;
@@ -17,6 +18,7 @@ interface CacheStats {
 @Injectable()
 export class ChatService {
   private openai: OpenAI;
+  private tokenizer: Tiktoken;
 
   constructor(
     private readonly configService: ConfigService,
@@ -29,6 +31,7 @@ export class ChatService {
     this.openai = new OpenAI({
       apiKey: this.configService.get<string>('openai.apiKey'),
     });
+    this.tokenizer = encoding_for_model('gpt-4o-mini');
   }
 
   async getChatMessages(
@@ -125,9 +128,12 @@ export class ChatService {
         order: { timestamp: 'ASC' },
       });
 
-      // format message to regquired openai
+      // 使用优化的上下文窗口算法
+      const contextMessages = this.getOptimizedContextWindow(messages);
+
+      // format message to required openai
       const completion = await this.openai.chat.completions.create({
-        messages: messages.map((msg) => ({
+        messages: contextMessages.map((msg) => ({
           role: msg.role,
           content: msg.content,
         })),
@@ -202,7 +208,7 @@ export class ChatService {
         order: { timestamp: 'ASC' },
       });
 
-      const contextMessages = this.getContextWindow(messages);
+      const contextMessages = this.getOptimizedContextWindow(messages);
 
       const stream = await this.openai.chat.completions.create({
         messages: contextMessages.map((msg) => ({
@@ -236,13 +242,75 @@ export class ChatService {
     }
   }
 
-  private getContextWindow(messages: ChatMessage[], maxMessages = 10) {
-    if (messages.length <= maxMessages) return messages;
+  private getOptimizedContextWindow(
+    messages: ChatMessage[],
+    maxTokens = 4000,
+  ): ChatMessage[] {
+    if (messages.length <= 1) return messages;
 
-    // 简单方法：保留最新的N条消息
-    return messages.slice(-maxMessages);
+    // ✅ 确保 tokenizer 始终可用，防止未初始化
+    const countTokens = (text: string): number =>
+      this.tokenizer
+        ? this.tokenizer.encode(text).length
+        : Math.ceil(text.length / 4);
 
-    // 更复杂的方法可以根据token数量等进行限制
+    // 1️⃣ 按时间划分消息
+    const latestMsg = messages[messages.length - 1];
+    const recentMsgs = messages.slice(
+      Math.max(0, messages.length - 10),
+      messages.length - 1,
+    );
+    const olderMsgs = messages.slice(0, Math.max(0, messages.length - 10));
+
+    // 2️⃣ 计算消息权重
+    const scoreMessage = (msg: ChatMessage): number => {
+      let score = msg.role === 'user' ? 3 : 2;
+      score += Math.min(5, countTokens(msg.content) / 200); // ✅ 修正 token 计算
+      if (
+        /important|key|critical|必须|重要|请记住/.test(
+          msg.content.toLowerCase(),
+        )
+      )
+        score += 3;
+      if (/\d+\.\s|[-*]\s|```/.test(msg.content)) score += 2;
+      return score;
+    };
+
+    // 3️⃣ 计算消息的权重，并存入数组
+    const scoredRecent = recentMsgs.map((msg) => ({
+      msg,
+      score: scoreMessage(msg),
+    }));
+    const scoredOlder = olderMsgs.map((msg) => ({
+      msg,
+      score: scoreMessage(msg),
+    }));
+
+    const result: ChatMessage[] = [latestMsg];
+    let tokensUsed = countTokens(latestMsg.content);
+
+    // 4️⃣ 先处理最近的高分消息
+    scoredRecent.sort((a, b) => b.score - a.score);
+    for (const { msg } of scoredRecent) {
+      const msgTokens = countTokens(msg.content);
+      if (tokensUsed + msgTokens > maxTokens) break;
+      result.push(msg);
+      tokensUsed += msgTokens;
+    }
+
+    // 5️⃣ 如果仍有空间，添加较早的重要消息
+    scoredOlder.sort((a, b) => b.score - a.score);
+    for (const { msg } of scoredOlder) {
+      const msgTokens = countTokens(msg.content);
+      if (tokensUsed + msgTokens > maxTokens) break;
+      result.push(msg);
+      tokensUsed += msgTokens;
+    }
+
+    return result.sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
   }
 
   //--------------testing---------------//
