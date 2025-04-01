@@ -8,7 +8,7 @@ import configuration from './config/configuration';
 import { AppService } from './app.service';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerStorage } from '@nestjs/throttler';
 import { ChatModule } from './chat/chat.module';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { UserThrottlerStorageService } from './common/services/user-throttler-storage.servervice';
@@ -53,12 +53,22 @@ import { UserThrottlerGuard } from './common/gurads/user-throttler.guard';
     AppService,
     UserThrottlerStorageService,
     {
+      provide: ThrottlerStorage,
+      useClass: UserThrottlerStorageService,
+    },
+    {
       provide: APP_GUARD,
       useClass: UserThrottlerGuard,
     },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: 'THROTTLER_OPTIONS',
+      useFactory: () => ({
+        throttlers: [{ ttl: 60, limit: 30 }],
+      }),
     },
   ],
 })
