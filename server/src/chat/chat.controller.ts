@@ -16,6 +16,7 @@ import type { ChatSession } from './entities/chat_sessions.entity';
 import { AuthGuard } from '@nestjs/passport';
 import { ChatMessageDto } from './dto/chat.dto';
 import type { Request, Response as ExpressResponse } from 'express';
+import { Throttle } from '@nestjs/throttler';
 
 // 声明Express请求对象中的用户属性
 declare module 'express' {
@@ -67,6 +68,9 @@ export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Get(':chatId/messages')
+  @Throttle({
+    default: { limit: 60, ttl: 60 },
+  })
   async getChatMessages(
     @Param('chatId') chatId: string,
     @Query('page') page: string = '1',
@@ -93,6 +97,7 @@ export class ChatController {
   }
 
   @Post('new')
+  @Throttle({ default: { limit: 10, ttl: 3600 } })
   async createChat(@Req() req: Request): Promise<ChatSession> {
     const userId = req.user?.id;
     if (!userId)
@@ -102,6 +107,7 @@ export class ChatController {
   }
 
   @Get('all')
+  @Throttle({ default: { limit: 60, ttl: 60 } })
   async getAllChats(@Req() req: Request): Promise<ChatSession[]> {
     const userId = req.user?.id;
     if (!userId)
@@ -111,6 +117,7 @@ export class ChatController {
   }
 
   @Get(':chatId')
+  @Throttle({ default: { limit: 60, ttl: 60 } })
   async getChatById(
     @Param('chatId') chatId: string,
   ): Promise<ChatSession | null> {

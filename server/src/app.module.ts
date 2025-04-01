@@ -11,6 +11,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ChatModule } from './chat/chat.module';
 import { RedisModule } from '@nestjs-modules/ioredis';
+import { UserThrottlerStorageService } from './common/services/user-throttler-storage.servervice';
+import { UserThrottlerGuard } from './common/gurads/user-throttler.guard';
 
 @Module({
   imports: [
@@ -31,13 +33,10 @@ import { RedisModule } from '@nestjs-modules/ioredis';
             : 1,
       }),
     }),
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          ttl: 60000,
-          limit: 10,
-        },
-      ],
+    ThrottlerModule.forRootAsync({
+      useFactory: () => ({
+        throttlers: [{ ttl: 60, limit: 30 }],
+      }),
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
@@ -50,6 +49,17 @@ import { RedisModule } from '@nestjs-modules/ioredis';
     UsersModule,
     ChatModule,
   ],
-  providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  providers: [
+    AppService,
+    UserThrottlerStorageService,
+    {
+      provide: APP_GUARD,
+      useClass: UserThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

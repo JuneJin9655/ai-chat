@@ -8,18 +8,17 @@ import {
   Post,
   Request,
   Response,
-  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto, RegisterResponseDto } from './dto/register.dto';
 import { LoginDto, LoginResponseDto } from './dto/login.dto';
 import { UsersService } from '../users/users.service';
-import { CustomThrottlerGuard } from 'src/common/gurads/throttler.guard';
 import { UserDto } from 'src/users/dto/user.dto';
 import { Role } from '../common/enums/roles.enum';
 import { Public } from 'src/common/decorators/public.decorator';
 import type { Response as ExpressResponse } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 
 export interface AuthenticatedRequest extends Request {
   user: { id: string; username: string };
@@ -34,8 +33,8 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  @UseGuards(CustomThrottlerGuard)
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 3600 } })
   @Post('register')
   async register(
     @Body() registerDto: RegisterDto,
@@ -48,8 +47,8 @@ export class AuthController {
     };
   }
 
-  @UseGuards(CustomThrottlerGuard)
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60 } })
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
@@ -87,6 +86,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @Throttle({ default: { limit: 60, ttl: 60 } })
   async getProfile(@Request() req: AuthenticatedRequest): Promise<UserDto> {
     const userId = parseInt(req.user.id);
     if (isNaN(userId)) {
@@ -103,6 +103,7 @@ export class AuthController {
 
   @Post('refresh')
   @Public()
+  @Throttle({ default: { limit: 60, ttl: 30 } })
   async refresh(
     @Body('refresh_token') bodyToken: string,
     @Request() req: AuthenticatedRequest,
