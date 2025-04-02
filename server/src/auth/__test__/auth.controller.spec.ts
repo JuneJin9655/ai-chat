@@ -140,8 +140,22 @@ describe('AuthController', () => {
       const clearCookieSpy = jest.spyOn(response, 'clearCookie');
 
       controller.logout(response);
-      expect(clearCookieSpy).toHaveBeenCalledWith('access_token');
-      expect(clearCookieSpy).toHaveBeenCalledWith('refresh_token');
+      expect(clearCookieSpy).toHaveBeenCalledWith(
+        'access_token',
+        expect.objectContaining({
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+        }),
+      );
+      expect(clearCookieSpy).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+        }),
+      );
     });
   });
 
@@ -527,8 +541,24 @@ describe('AuthController', () => {
 
       controller.logout(response);
 
-      expect(cookieSpy).toHaveBeenNthCalledWith(1, 'access_token');
-      expect(cookieSpy).toHaveBeenNthCalledWith(2, 'refresh_token');
+      expect(cookieSpy).toHaveBeenNthCalledWith(
+        1,
+        'access_token',
+        expect.objectContaining({
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+        }),
+      );
+      expect(cookieSpy).toHaveBeenNthCalledWith(
+        2,
+        'refresh_token',
+        expect.objectContaining({
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+        }),
+      );
     });
   });
 

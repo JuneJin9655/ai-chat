@@ -123,6 +123,14 @@ export class AuthController {
       path: '/',
     });
 
+    response.cookie('refresh_token', result.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7天
+      path: '/', // ✅ 改成统一的路径
+    });
+
     return {
       ...result,
       refresh_token: token,
@@ -137,8 +145,19 @@ export class AuthController {
 
   @Post('logout')
   logout(@Response({ passthrough: true }) response: ExpressResponse) {
-    response.clearCookie('access_token');
-    response.clearCookie('refresh_token');
+    response.clearCookie('access_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+
+    response.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
 
     return { message: 'Logged out successfully' };
   }

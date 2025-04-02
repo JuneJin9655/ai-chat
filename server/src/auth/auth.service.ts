@@ -128,7 +128,9 @@ export class AuthService {
     }
   }
 
-  async refreshToken(token: string): Promise<{ access_token: string }> {
+  async refreshToken(
+    token: string,
+  ): Promise<{ access_token: string; refresh_token: string }> {
     const refreshToken = await this.refreshTokenRepository.findOne({
       where: { token },
       relations: ['user'],
@@ -147,6 +149,16 @@ export class AuthService {
     };
     const access_token = this.jwtService.sign(payload);
 
-    return { access_token };
+    // 生成新的刷新令牌
+    const newRefreshToken = await this.generateRefreshToken(refreshToken.user);
+
+    // 将旧令牌标记为已撤销
+    refreshToken.isRevoked = true;
+    await this.refreshTokenRepository.save(refreshToken);
+
+    return {
+      access_token,
+      refresh_token: newRefreshToken.token,
+    };
   }
 }

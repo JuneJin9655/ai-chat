@@ -260,11 +260,6 @@ describe('AuthService', () => {
       const mockUser = {
         id: 1,
         username: 'testuser',
-        password: 'hashedpassword',
-        email: 'test@example.com',
-        role: Role.USER,
-        avatar: '',
-        createdAt: new Date(),
       } as User;
 
       const mockRefreshToken = {
@@ -277,15 +272,28 @@ describe('AuthService', () => {
         isRevoked: false,
       } as unknown as RefreshToken;
 
+      const newRefreshToken = {
+        token: 'new.refresh.token',
+      } as unknown as RefreshToken;
+
       jest
         .spyOn(refreshTokenRepository, 'findOne')
         .mockResolvedValue(mockRefreshToken);
       jest.spyOn(jwtService, 'sign').mockReturnValue('new.access.token');
+      // Mock generateRefreshToken to return a new refresh token
+      jest
+        .spyOn(service, 'generateRefreshToken')
+        .mockResolvedValue(newRefreshToken);
+      // Mock the save method
+      jest
+        .spyOn(refreshTokenRepository, 'save')
+        .mockResolvedValue({ ...mockRefreshToken, isRevoked: true });
 
       const result = await service.refreshToken('valid.refresh.token');
 
       expect(result).toEqual({
         access_token: 'new.access.token',
+        refresh_token: 'new.refresh.token',
       });
     });
 
