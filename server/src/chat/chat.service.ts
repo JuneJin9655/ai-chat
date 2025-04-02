@@ -131,6 +131,11 @@ export class ChatService {
       // 使用优化的上下文窗口算法
       const contextMessages = this.getOptimizedContextWindow(messages);
 
+      // 确保至少有一条消息，防止OpenAI API报错
+      if (contextMessages.length === 0) {
+        contextMessages.push(userMessage);
+      }
+
       // format message to required openai
       const completion = await this.openai.chat.completions.create({
         messages: contextMessages.map((msg) => ({
@@ -185,6 +190,21 @@ export class ChatService {
     });
   }
 
+  async deleteChat(chatId: string, userId: string): Promise<void> {
+    const chat = await this.chatSessionRepo.findOne({
+      where: { id: chatId, userId },
+      relations: ['messages'],
+    });
+
+    if (!chat) {
+      throw new NotFoundException(
+        `Chat session with ID ${chatId} not found or does not belong to you`,
+      );
+    }
+    await this.chatSessionRepo.remove(chat);
+    await this.redisService.invalidateChatCache(chatId);
+  }
+
   // Stream API
   async chatWithAIStream(chatId: string, message: string) {
     try {
@@ -209,6 +229,11 @@ export class ChatService {
       });
 
       const contextMessages = this.getOptimizedContextWindow(messages);
+
+      // 确保至少有一条消息，防止OpenAI API报错
+      if (contextMessages.length === 0) {
+        contextMessages.push(userMessage);
+      }
 
       const stream = await this.openai.chat.completions.create({
         messages: contextMessages.map((msg) => ({
@@ -246,7 +271,14 @@ export class ChatService {
     messages: ChatMessage[],
     maxTokens = 4000,
   ): ChatMessage[] {
-    if (messages.length <= 1) return messages;
+    if (messages.length === 0) {
+      console.warn(
+        'No messages found for optimization, this should not happen',
+      );
+      return [];
+    }
+
+    if (messages.length === 1) return messages;
 
     // ✅ 确保 tokenizer 始终可用，防止未初始化
     const countTokens = (text: string): number =>

@@ -10,6 +10,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   Res,
+  Delete,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import type { ChatSession } from './entities/chat_sessions.entity';
@@ -192,5 +193,18 @@ export class ChatController {
         response.end();
       }
     }
+  }
+
+  @Delete(':chatId')
+  async deleteChat(
+    @Param('chatId') chatId: string,
+    @Req() req: Request,
+  ): Promise<{ success: boolean }> {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new UnauthorizedException('Unauthorized: No user ID found');
+    }
+    await this.chatService.deleteChat(chatId, userId);
+    return { success: true };
   }
 }
