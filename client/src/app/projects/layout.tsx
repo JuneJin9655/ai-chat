@@ -1,4 +1,4 @@
-import Sidebar from '@/components/UI/Sidebar';
+import Sidebar from '@/components/ui/Sidebar';
 import { ReactNode } from 'react';
 
 export default function ProjectLayout({ children }: { children: ReactNode }) {

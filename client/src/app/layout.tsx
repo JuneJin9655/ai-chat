@@ -1,8 +1,7 @@
 import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
 import type { Metadata } from 'next';
-import ParticlesBackground from '@/components/BackGround/ParticlesBackground';
-import CustomCursor from '@/components/UI/CustomCursor';
+import ParticlesBackground from '@/components/backGround/ParticlesBackground';
 
 export const metadata: Metadata = {
   title: 'My SaaS Application',
@@ -17,7 +16,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CustomCursor />
         <AuthProvider>
           <ParticlesBackground>
             {children}

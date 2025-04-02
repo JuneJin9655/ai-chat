@@ -1,9 +1,10 @@
+// app/projects/ai/page.tsx
 'use client'
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import ChatBox from '@/components/Chat/ChatBox';
+import ChatInterface from '@/components/chat/ChatInterface';
 
 export default function AIChatPage() {
     const { user, loading } = useAuth();
@@ -26,7 +27,7 @@ export default function AIChatPage() {
     return (
         <div>
             <h1 className="text-2xl font-bold text-white mb-6 font-orbitron">AI Chat</h1>
-            <ChatBox />
+            <ChatInterface />
         </div>
     );
 }

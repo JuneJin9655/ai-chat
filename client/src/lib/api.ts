@@ -1,6 +1,7 @@
 'use client'
 
 import { AUthResponse, LoginCredentials, RegisterCredentials, User } from "@/types/auth";
+import { CacheStats, ChatMessagesResponse, ChatSession, ChatWithAIResponse } from "@/types/chat";
 import axios from "axios";
 
 interface FailedQueueItem {
@@ -110,8 +111,29 @@ export const authApi = {
     },
 
     // 退出登录
-    logout: async (): Promise<void> => {
-        await api.post('/auth/logout');
+    logout: async (): Promise<{ success: boolean; message: string }> => {
+        try {
+            const response = await api.post('/auth/logout');
+
+            // 清除本地存储的令牌或用户状态（如果有）
+            localStorage.removeItem('user');
+
+            // 清除API实例的授权头
+            if (api.defaults.headers.common['Authorization']) {
+                delete api.defaults.headers.common['Authorization'];
+            }
+
+            return {
+                success: true,
+                message: response.data?.message || 'Logged out successfully'
+            };
+        } catch (error) {
+            console.error('Logout failed:', error);
+            return {
+                success: false,
+                message: 'Failed to logout. Please try again.'
+            };
+        }
     },
 
     // 刷新token
@@ -123,9 +145,175 @@ export const authApi = {
 
 // 聊天相关API方法
 export const chatApi = {
-    // 发送消息
-    sendMessage: async (message: string): Promise<{ message: string; timestamp: string }> => {
-        const response = await api.post('/chat', { message });
+    createChat: async (): Promise<ChatSession> => {
+        try {
+            const response = await api.post('/chat/new');
+            const sessionData = response.data.data || response.data;
+
+            if (!sessionData || !sessionData.id) {
+                throw new Error('Invalid session data returned from server');
+            }
+
+            return sessionData;
+        } catch (error) {
+            console.error('创建聊天会话失败:', error);
+            throw error;
+        }
+    },
+
+    getAllChats: async (): Promise<ChatSession[]> => {
+        const response = await api.get('/chat/all');
+
+        // 确保返回数组
+        if (Array.isArray(response.data)) {
+            return response.data;
+        } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+            return response.data.data;
+        } else {
+            return [];
+        }
+    },
+
+    getChatById: async (chatId: string): Promise<ChatSession | null> => {
+        const response = await api.get(`/chat/${chatId}`);
+        return response.data;
+    },
+
+    getChatMessages: async (chatId: string, page: number = 1, limit: number = 20): Promise<ChatMessagesResponse> => {
+        try {
+            const response = await api.get(`/chat/${chatId}/messages`, {
+                params: { page, limit }
+            });
+
+            // 处理响应数据
+            if (response.data && typeof response.data === 'object') {
+                const messageData = response.data.data || response.data;
+                if (!messageData.messages) {
+                    messageData.messages = [];
+                }
+                return messageData;
+            } else {
+                return {
+                    messages: [],
+                    pagination: {
+                        page, limit, total: 0, totalPages: 0
+                    },
+                    source: 'database'
+                };
+            }
+        } catch (error) {
+            console.error('获取聊天消息失败:', error);
+            throw error;
+        }
+    },
+
+    sendChatMessage: async (chatId: string, message: string): Promise<ChatWithAIResponse> => {
+        try {
+            const payload = { message };
+            const response = await api.post(`/chat/${chatId}/message`, payload);
+            return response.data;
+        } catch (error: any) {
+            console.error('发送消息失败:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
+    deleteChat: async (chatId: string): Promise<{ success: boolean }> => {
+        try {
+            const response = await api.delete(`/chat/${chatId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Failed to delete chat session:', error);
+            throw error;
+        }
+    },
+
+    streamChatMessage: async (
+        chatId: string,
+        message: string,
+        onChunk: (chunk: string) => void,
+        onComplete: () => void,
+        onError: (error: Error) => void
+    ): Promise<void> => {
+        try {
+            // 请求头
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // 添加认证头
+            if (api.defaults.headers.common['Authorization']) {
+                headers['Authorization'] = api.defaults.headers.common['Authorization'] as string;
+            }
+
+            // 发送请求
+            const response = await fetch(`${API_URL}/chat/${chatId}/stream`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ message }),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Stream request failed with status ${response.status}`);
+            }
+
+            // 处理流式响应
+            const reader = response.body?.getReader();
+            if (!reader) {
+                throw new Error('Stream reader not available');
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            const processStream = async () => {
+                while (true) {
+                    const { done, value } = await reader.read();
+
+                    if (done) {
+                        onComplete();
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+
+                            if (data === '[DONE]') {
+                                onComplete();
+                                return;
+                            }
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.content) {
+                                    onChunk(parsed.content);
+                                }
+                                if (parsed.error) {
+                                    onError(new Error(parsed.error));
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('解析 SSE 数据错误:', e);
+                            }
+                        }
+                    }
+                }
+            };
+
+            await processStream();
+        } catch (error) {
+            onError(error instanceof Error ? error : new Error(String(error)));
+        }
+    },
+
+    getCacheStats: async (): Promise<CacheStats> => {
+        const response = await api.get('/chat/stats/cache');
         return response.data;
     }
 };

@@ -1,4 +1,4 @@
-import RoundedContainer from '@/components/UI/RoundedContainer';
+import RoundedContainer from '@/components/ui/RoundedContainer';
 import { Suspense } from 'react';
 import ClientHomePage from '@/components/Home/ClientHomePage';
 

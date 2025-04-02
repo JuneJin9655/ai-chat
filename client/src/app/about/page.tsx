@@ -2,13 +2,13 @@
 
 import React from 'react';
 import AboutMe from '@/components/About/AboutMe';
-import RoundedContainer from '@/components/UI/RoundedContainer';
-import Navbar from '@/components/UI/Navbar';
-import Sidebar from '@/components/UI/Sidebar';
+import RoundedContainer from '@/components/ui/RoundedContainer';
+import Navbar from '@/components/ui/Navbar';
+import Sidebar from '@/components/ui/Sidebar';
 import { Suspense } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import LoginForm from '@/components/Auth/LoginForm';
-import RegisterForm from '@/components/Auth/RegisterForm';
+import LoginForm from '@/components/auth/LoginForm';
+import RegisterForm from '@/components/auth/RegisterForm';
 
 export default function AboutPage() {
     const { showLoginForm, showRegisterForm, setShowLoginForm } = useAuth();
