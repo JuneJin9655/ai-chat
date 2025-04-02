@@ -46,7 +46,7 @@ api.interceptors.response.use(
         // 如果错误是401并且不是刷新token的请求，且没有尝试过重试
         if (error.response?.status === 401 &&
             !originalRequest._retry &&
-            !originalRequest.url.includes('/auth/refresh-token')) {
+            !originalRequest.url.includes('/auth/refresh')) {
 
             if (isRefreshing) {
                 // 如果已经在刷新，将请求加入队列
@@ -95,19 +95,19 @@ export const authApi = {
     // 登录方法
     login: async (credentials: LoginCredentials): Promise<AUthResponse> => {
         const response = await api.post('/auth/login', credentials);
-        return response.data.data;
+        return response.data?.data || response.data;
     },
 
     // 注册方法
     register: async (credentials: RegisterCredentials): Promise<User> => {
         const response = await api.post('/auth/register', credentials);
-        return response.data.data;
+        return response.data?.data || response.data;
     },
 
     // 获取用户配置文件
     getProfile: async (): Promise<User> => {
         const response = await api.get('/auth/profile');
-        return response.data.data;
+        return response.data?.data || response.data;
     },
 
     // 退出登录
@@ -139,7 +139,7 @@ export const authApi = {
     // 刷新token
     refreshToken: async (): Promise<AUthResponse> => {
         const response = await api.post('/auth/refresh');
-        return response.data.data;
+        return response.data?.data || response.data;
     }
 };
 
@@ -176,7 +176,7 @@ export const chatApi = {
 
     getChatById: async (chatId: string): Promise<ChatSession | null> => {
         const response = await api.get(`/chat/${chatId}`);
-        return response.data;
+        return response.data?.data || response.data;
     },
 
     getChatMessages: async (chatId: string, page: number = 1, limit: number = 20): Promise<ChatMessagesResponse> => {
@@ -211,7 +211,7 @@ export const chatApi = {
         try {
             const payload = { message };
             const response = await api.post(`/chat/${chatId}/message`, payload);
-            return response.data;
+            return response.data?.data || response.data;
         } catch (error: any) {
             console.error('发送消息失败:', error.response?.data || error.message);
             throw error;
@@ -221,7 +221,7 @@ export const chatApi = {
     deleteChat: async (chatId: string): Promise<{ success: boolean }> => {
         try {
             const response = await api.delete(`/chat/${chatId}`);
-            return response.data;
+            return response.data?.data || response.data;
         } catch (error) {
             console.error('Failed to delete chat session:', error);
             throw error;
@@ -314,6 +314,6 @@ export const chatApi = {
 
     getCacheStats: async (): Promise<CacheStats> => {
         const response = await api.get('/chat/stats/cache');
-        return response.data;
+        return response.data?.data || response.data;
     }
 };

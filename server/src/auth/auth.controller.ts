@@ -31,7 +31,7 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   @Public()
   @Throttle({ default: { limit: 3, ttl: 3600 } })
@@ -68,7 +68,7 @@ export class AuthController {
 
     response.cookie('access_token', result.access_token, {
       httpOnly: true,
-      secure: process.env.NODR_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: accessMaxAge,
       path: '/',
@@ -79,7 +79,7 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: refreshMaxAge,
-      path: '/auth/refresh',
+      path: '/',
     });
 
     return result;
@@ -128,12 +128,12 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7天
-      path: '/', // ✅ 改成统一的路径
+      path: '/',
     });
 
     return {
       ...result,
-      refresh_token: token,
+      refresh_token: result.refresh_token,
     };
   }
 

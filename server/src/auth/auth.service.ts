@@ -24,7 +24,7 @@ export class AuthService {
     private configService: ConfigService,
     private jwtService: JwtService,
     private usersService: UsersService,
-  ) {}
+  ) { }
 
   async generateRefreshToken(user: User): Promise<RefreshToken> {
     const refreshMaxAge =
@@ -131,10 +131,13 @@ export class AuthService {
   async refreshToken(
     token: string,
   ): Promise<{ access_token: string; refresh_token: string }> {
+    console.log('Received refresh_token:', token);
     const refreshToken = await this.refreshTokenRepository.findOne({
       where: { token },
       relations: ['user'],
     });
+
+    console.log('Matched token from DB:', refreshToken);
     if (
       !refreshToken ||
       refreshToken.isRevoked ||
