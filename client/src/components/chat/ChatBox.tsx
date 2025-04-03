@@ -2,7 +2,7 @@
 
 import { chatApi } from "@/lib/api";
 import { ChatMessage, ChatSession } from "@/types/chat"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 
 interface TypingMessage extends ChatMessage {
     displayedContent?: string;
@@ -14,6 +14,9 @@ interface ChatBoxProps {
     onMessageSent?: () => void;
 }
 
+// 消息缓存键前缀
+const MESSAGE_CACHE_PREFIX = 'chat_messages_';
+
 export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
     const [messages, setMessages] = useState<TypingMessage[]>([]);
     const [input, setInput] = useState('');
@@ -21,12 +24,62 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
     const [loadingMessages, setLoadingMessages] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const sessionIdRef = useRef<string | null>(null);
+
+    // 生成缓存键
+    const getCacheKey = useCallback((sessionId: string) => {
+        return `${MESSAGE_CACHE_PREFIX}${sessionId}`;
+    }, []);
+
+    // 保存消息到缓存
+    const saveMessagesToCache = useCallback((sessionId: string, msgs: TypingMessage[]) => {
+        if (!sessionId) return;
+        try {
+            localStorage.setItem(getCacheKey(sessionId), JSON.stringify(msgs));
+        } catch (e) {
+            console.error('Failed to save messages to cache:', e);
+        }
+    }, [getCacheKey]);
+
+    // 从缓存加载消息
+    const loadMessagesFromCache = useCallback((sessionId: string): TypingMessage[] | null => {
+        if (!sessionId) return null;
+        try {
+            const cachedData = localStorage.getItem(getCacheKey(sessionId));
+            if (cachedData) {
+                return JSON.parse(cachedData);
+            }
+        } catch (e) {
+            console.error('Failed to load messages from cache:', e);
+        }
+        return null;
+    }, [getCacheKey]);
+
+    // 当消息更新时保存到缓存
+    useEffect(() => {
+        if (session?.id && messages.length > 0) {
+            saveMessagesToCache(session.id, messages);
+        }
+    }, [messages, session?.id, saveMessagesToCache]);
 
     // 加载会话消息
     useEffect(() => {
         if (!session || !session.id) {
             setMessages([]);
             return;
+        }
+
+        // 如果是切换到不同的会话
+        if (sessionIdRef.current !== session.id) {
+            sessionIdRef.current = session.id;
+            setInput(''); // 清空输入框
+
+            // 先尝试从缓存加载
+            const cachedMessages = loadMessagesFromCache(session.id);
+            if (cachedMessages && cachedMessages.length > 0) {
+                setMessages(cachedMessages);
+                return; // 如果有缓存，直接使用不请求API
+            }
         }
 
         const loadMessages = async () => {
@@ -44,6 +97,8 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                         return msg;
                     });
                     setMessages(messagesWithUniqueIds.reverse());
+                    // 保存到缓存
+                    saveMessagesToCache(session.id, messagesWithUniqueIds.reverse());
                 } else {
                     setMessages([]);
                 }
@@ -54,8 +109,9 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                 setLoadingMessages(false);
             }
         };
+
         loadMessages();
-    }, [session]);
+    }, [session, loadMessagesFromCache, saveMessagesToCache]);
 
     // 滚动到最新消息
     const scrollToBottom = () => {
@@ -124,7 +180,9 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                 content: input,
                 timestamp: new Date()
             };
-            setMessages(prev => [...prev, userMsg]);
+            const newMessages = [...messages, userMsg];
+            setMessages(newMessages);
+            saveMessagesToCache(session.id, newMessages); // 保存用户消息到缓存
             setInput('');
 
             // 创建AI消息占位符
@@ -137,7 +195,9 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                 isTyping: true,
                 timestamp: new Date()
             };
-            setMessages(prev => [...prev, aiMsg]);
+            const messagesWithAiMsg = [...newMessages, aiMsg];
+            setMessages(messagesWithAiMsg);
+            saveMessagesToCache(session.id, messagesWithAiMsg); // 保存AI消息到缓存
 
             try {
                 // 对于新会话，先使用普通API确保有历史
@@ -153,19 +213,33 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                     input,
                     // 处理数据块
                     (chunk) => {
-                        setMessages(prev => prev.map(msg =>
-                            msg.id === aiMsgId
-                                ? { ...msg, content: msg.content + chunk }
-                                : msg
-                        ));
+                        setMessages(prev => {
+                            const updatedMessages = prev.map(msg =>
+                                msg.id === aiMsgId
+                                    ? { ...msg, content: msg.content + chunk }
+                                    : msg
+                            );
+                            // 保存到缓存
+                            if (session?.id) {
+                                saveMessagesToCache(session.id, updatedMessages);
+                            }
+                            return updatedMessages;
+                        });
                     },
                     // 完成回调
                     () => {
-                        setMessages(prev => prev.map(msg =>
-                            msg.id === aiMsgId
-                                ? { ...msg, isTyping: false }
-                                : msg
-                        ));
+                        setMessages(prev => {
+                            const updatedMessages = prev.map(msg =>
+                                msg.id === aiMsgId
+                                    ? { ...msg, isTyping: false }
+                                    : msg
+                            );
+                            // 保存到缓存
+                            if (session?.id) {
+                                saveMessagesToCache(session.id, updatedMessages);
+                            }
+                            return updatedMessages;
+                        });
                         if (onMessageSent) onMessageSent();
                     },
                     // 错误处理
@@ -174,29 +248,50 @@ export default function ChatBox({ session, onMessageSent }: ChatBoxProps) {
                         chatApi.sendChatMessage(session.id, input).then(response => {
                             const aiResponse = response.messages?.find(m => m.role === 'assistant');
                             if (aiResponse) {
-                                setMessages(prev => prev.map(msg =>
-                                    msg.id === aiMsgId
-                                        ? { ...msg, content: aiResponse.content, isTyping: false }
-                                        : msg
-                                ));
+                                setMessages(prev => {
+                                    const updatedMessages = prev.map(msg =>
+                                        msg.id === aiMsgId
+                                            ? { ...msg, content: aiResponse.content, isTyping: false }
+                                            : msg
+                                    );
+                                    // 保存到缓存
+                                    if (session?.id) {
+                                        saveMessagesToCache(session.id, updatedMessages);
+                                    }
+                                    return updatedMessages;
+                                });
                             }
                         }).catch(() => {
                             // 两种API都失败
-                            setMessages(prev => prev.map(msg =>
-                                msg.id === aiMsgId
-                                    ? { ...msg, content: '消息发送失败，请重试', isTyping: false }
-                                    : msg
-                            ));
+                            setMessages(prev => {
+                                const updatedMessages = prev.map(msg =>
+                                    msg.id === aiMsgId
+                                        ? { ...msg, content: '消息发送失败，请重试', isTyping: false }
+                                        : msg
+                                );
+                                // 保存到缓存
+                                if (session?.id) {
+                                    saveMessagesToCache(session.id, updatedMessages);
+                                }
+                                return updatedMessages;
+                            });
                             setError('Failed to send message');
                         });
                     }
                 );
             } catch (apiError) {
-                setMessages(prev => prev.map(msg =>
-                    msg.id === aiMsgId
-                        ? { ...msg, content: '发送消息出错，请重试', isTyping: false }
-                        : msg
-                ));
+                setMessages(prev => {
+                    const updatedMessages = prev.map(msg =>
+                        msg.id === aiMsgId
+                            ? { ...msg, content: '发送消息出错，请重试', isTyping: false }
+                            : msg
+                    );
+                    // 保存到缓存
+                    if (session?.id) {
+                        saveMessagesToCache(session.id, updatedMessages);
+                    }
+                    return updatedMessages;
+                });
                 setError('Failed to send message');
             }
         } catch (error) {
